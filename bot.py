@@ -82,6 +82,25 @@ def validasi_nomor(nomor):
         return None
     return nomor
 
+def ambil_ref_id(text, prefix):
+    """
+    Ambil ref_id dari perintah admin.
+    Support format: /prefix_REFID atau /prefix REFID
+    Telegram kadang memotong underscore panjang jadi spasi.
+    """
+    text = text.strip()
+    # Hapus nama bot jika ada (misal /konfirmasi@NamaBot_REFID)
+    if "@" in text.split()[0]:
+        text = text.split()[0].split("@")[0] + " " + " ".join(text.split()[1:])
+    # Coba format dengan underscore: /prefix_REFID
+    if f"/{prefix}_" in text:
+        return text.split(f"/{prefix}_", 1)[1].strip().split()[0]
+    # Coba format dengan spasi: /prefix REFID
+    parts = text.split(None, 1)
+    if len(parts) > 1:
+        return parts[1].strip().split()[0]
+    return None
+
 # ─────────────────────────────────────────────
 # KEYBOARD HELPERS
 # ─────────────────────────────────────────────
@@ -308,9 +327,9 @@ def konfirmasi_order(message):
         f"📞 {nomor}\n"
         f"💰 {format_rupiah(produk['harga'])}\n"
         f"Ref ID: `{ref_id}`\n\n"
-        f"Konfirmasi: /konfirmasi_{ref_id}\n"
-        f"Sukses: /sukses_{ref_id}\n"
-        f"Tolak: /tolak_{ref_id}"
+        f"Konfirmasi: /konfirmasi {ref_id}\n"
+        f"Sukses: /sukses {ref_id}\n"
+        f"Tolak: /tolak {ref_id}"
     )
     try:
         bot.send_message(ADMIN_ID, notif, parse_mode="Markdown")
@@ -467,10 +486,9 @@ def kembali_admin(message):
 def konfirmasi_bayar(message):
     if message.from_user.id != ADMIN_ID:
         return
-    try:
-        ref_id = message.text.split("_", 1)[1]
-    except:
-        bot.send_message(message.chat.id, "Format: /konfirmasi_REFID")
+    ref_id = ambil_ref_id(message.text, "konfirmasi")
+    if not ref_id:
+        bot.send_message(message.chat.id, "Format: /konfirmasi REFID")
         return
     order = get_order(ref_id)
     if not order:
@@ -487,17 +505,15 @@ def konfirmasi_bayar(message):
 def order_sukses(message):
     if message.from_user.id != ADMIN_ID:
         return
-    try:
-        ref_id = message.text.split("_", 1)[1]
-    except:
-        bot.send_message(message.chat.id, "Format: /sukses_REFID")
+    ref_id = ambil_ref_id(message.text, "sukses")
+    if not ref_id:
+        bot.send_message(message.chat.id, "Format: /sukses REFID")
         return
     order = get_order(ref_id)
     if not order:
         bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan.")
         return
 
-    # Proses transaksi ke Digiflazz
     hasil = transaksi(ref_id, order["nomor"], order["kode"])
     data  = hasil.get("data", {})
     rc    = data.get("rc", "")
@@ -526,13 +542,18 @@ def order_sukses(message):
 def order_tolak(message):
     if message.from_user.id != ADMIN_ID:
         return
-    try:
-        parts  = message.text.split("_", 2)
-        ref_id = parts[1]
-        alasan = parts[2] if len(parts) > 2 else "Pembayaran tidak diterima"
-    except:
-        bot.send_message(message.chat.id, "Format: /tolak_REFID_alasan")
+    ref_id = ambil_ref_id(message.text, "tolak")
+    if not ref_id:
+        bot.send_message(message.chat.id, "Format: /tolak REFID alasan")
         return
+    # Ambil alasan jika ada (setelah ref_id)
+    try:
+        teks = message.text.strip()
+        setelah_refid = teks.split(ref_id, 1)[1].strip()
+        alasan = setelah_refid if setelah_refid else "Pembayaran tidak diterima"
+    except:
+        alasan = "Pembayaran tidak diterima"
+
     order = get_order(ref_id)
     if not order:
         bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan.")
