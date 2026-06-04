@@ -1,97 +1,135 @@
 import os
-import httpx
+import psycopg2
 from dotenv import load_dotenv
+from datetime import datetime
+import urllib.parse
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=minimal"
-}
+def get_conn():
+    r = urllib.parse.urlparse(DATABASE_URL)
+    return psycopg2.connect(
+        host=r.hostname,
+        port=r.port or 5432,
+        dbname=r.path.lstrip("/"),
+        user=urllib.parse.unquote(r.username),
+        password=urllib.parse.unquote(r.password),
+        sslmode="require",
+        connect_timeout=10
+    )
 
-def db_get(table, filters=None, limit=None, order=None):
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    params = {"select": "*"}
-    if filters:
-        params.update(filters)
-    if limit:
-        params["limit"] = limit
-    if order:
-        params["order"] = order
-    try:
-        r = httpx.get(url, headers=HEADERS, params=params, timeout=10)
-        return r.json() if r.status_code == 200 else []
-    except Exception as e:
-        print(f"DB GET error: {e}")
-        return []
-
-def db_post(table, data):
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    try:
-        r = httpx.post(url, headers=HEADERS, json=data, timeout=10)
-        return r.status_code in [200, 201]
-    except Exception as e:
-        print(f"DB POST error: {e}")
-        return False
-
-def db_patch(table, data, filters):
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    try:
-        r = httpx.patch(url, headers=HEADERS, json=data, params=filters, timeout=10)
-        return r.status_code in [200, 204]
-    except Exception as e:
-        print(f"DB PATCH error: {e}")
-        return False
-
-def db_upsert(table, data):
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    headers = {**HEADERS, "Prefer": "resolution=merge-duplicates"}
-    try:
-        r = httpx.post(url, headers=headers, json=data, timeout=10)
-        return r.status_code in [200, 201]
-    except Exception as e:
-        print(f"DB UPSERT error: {e}")
-        return False
+def init_db():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS adk_users (
+            id          BIGINT PRIMARY KEY,
+            nama        TEXT,
+            username    TEXT,
+            created_at  TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS adk_orders (
+            id          SERIAL PRIMARY KEY,
+            ref_id      TEXT UNIQUE,
+            user_id     BIGINT,
+            nama        TEXT,
+            tipe        TEXT,
+            operator    TEXT,
+            produk      TEXT,
+            kode        TEXT,
+            nomor       TEXT,
+            harga       INTEGER,
+            status      TEXT DEFAULT 'pending',
+            created_at  TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    conn.close()
+    print("✅ Database Andika Store siap.")
 
 def save_user(user_id, nama, username):
-    return db_upsert("adk_users", {"id": user_id, "nama": nama, "username": username or "-"})
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO adk_users (id, nama, username) VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET nama=%s, username=%s",
+        (user_id, nama, username or "-", nama, username or "-")
+    )
+    conn.commit()
+    conn.close()
 
 def get_all_users():
-    data = db_get("adk_users")
-    return [u["id"] for u in data] if data else []
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT id FROM adk_users")
+    rows = c.fetchall()
+    conn.close()
+    return [r[0] for r in rows]
 
 def count_users():
-    data = db_get("adk_users")
-    return len(data) if data else 0
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM adk_users")
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else 0
 
 def save_order(ref_id, user_id, nama, tipe, operator, produk, kode, nomor, harga):
-    return db_post("adk_orders", {
-        "ref_id": ref_id, "user_id": user_id, "nama": nama,
-        "tipe": tipe, "operator": operator, "produk": produk,
-        "kode": kode, "nomor": nomor, "harga": harga, "status": "pending"
-    })
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO adk_orders (ref_id, user_id, nama, tipe, operator, produk, kode, nomor, harga) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (ref_id, user_id, nama, tipe, operator, produk, kode, nomor, harga)
+    )
+    conn.commit()
+    conn.close()
 
 def get_order(ref_id):
-    data = db_get("adk_orders", filters={"ref_id": f"eq.{ref_id}"})
-    return data[0] if data else None
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT ref_id, user_id, nama, tipe, operator, produk, kode, nomor, harga, status, created_at FROM adk_orders WHERE ref_id = %s", (ref_id,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "ref_id": row[0], "user_id": row[1], "nama": row[2],
+        "tipe": row[3], "operator": row[4], "produk": row[5],
+        "kode": row[6], "nomor": row[7], "harga": row[8],
+        "status": row[9], "created_at": str(row[10])
+    }
 
 def update_order_status(ref_id, status):
-    return db_patch("adk_orders", {"status": status}, {"ref_id": f"eq.{ref_id}"})
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE adk_orders SET status = %s WHERE ref_id = %s", (status, ref_id))
+    conn.commit()
+    conn.close()
 
 def get_recent_orders(limit=10):
-    return db_get("adk_orders", limit=limit, order="created_at.desc") or []
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT ref_id, user_id, nama, tipe, operator, produk, kode, nomor, harga, status, created_at FROM adk_orders ORDER BY created_at DESC LIMIT %s", (limit,))
+    rows = c.fetchall()
+    conn.close()
+    return [{"ref_id": r[0], "user_id": r[1], "nama": r[2], "tipe": r[3],
+             "operator": r[4], "produk": r[5], "kode": r[6], "nomor": r[7],
+             "harga": r[8], "status": r[9], "created_at": str(r[10])} for r in rows]
 
 def get_order_stats():
-    data = db_get("adk_orders") or []
-    total = len(data)
-    sukses = sum(1 for o in data if o["status"] == "sukses")
-    pending = sum(1 for o in data if o["status"] == "pending")
-    gagal = sum(1 for o in data if o["status"] == "gagal")
-    diproses = sum(1 for o in data if o["status"] == "diproses")
-    omzet = sum(o["harga"] for o in data if o["status"] == "sukses")
-    return {"total": total, "sukses": sukses, "pending": pending, "gagal": gagal, "diproses": diproses, "omzet": omzet}
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT status, COUNT(*), COALESCE(SUM(harga),0) FROM adk_orders GROUP BY status")
+    rows = c.fetchall()
+    conn.close()
+    stats = {"total": 0, "sukses": 0, "pending": 0, "gagal": 0, "diproses": 0, "omzet": 0}
+    for status, count, total in rows:
+        stats["total"] += count
+        if status in stats:
+            stats[status] = count
+        if status == "sukses":
+            stats["omzet"] = total
+    return stats

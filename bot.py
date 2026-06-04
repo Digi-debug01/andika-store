@@ -8,20 +8,24 @@ from datetime import datetime
 from products import PRODUCTS, SKU_MAP
 from database import (save_user, get_all_users, count_users,
                       save_order, get_order, update_order_status,
-                      get_recent_orders, get_order_stats)
+                      get_recent_orders, get_order_stats, init_db)
 
 load_dotenv()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
+BOT_TOKEN     = os.getenv("BOT_TOKEN")
+ADMIN_ID      = int(os.getenv("ADMIN_ID"))
+ADMIN_USERNAME= os.getenv("ADMIN_USERNAME", "admin")
 DIGI_USERNAME = os.getenv("DIGI_USERNAME", "")
-DIGI_API_KEY = os.getenv("DIGI_API_KEY", "")
-SANDBOX_MODE = os.getenv("SANDBOX_MODE", "True") == "True"
+DIGI_API_KEY  = os.getenv("DIGI_API_KEY", "")
+SANDBOX_MODE  = os.getenv("SANDBOX_MODE", "True") == "True"
+NAMA_REKENING = os.getenv("NAMA_REKENING", "Andika")
+NO_REKENING   = os.getenv("NO_REKENING", "")
+BANK_REKENING = os.getenv("BANK_REKENING", "BCA")
 
 DIGI_URL = "https://api.digiflazz.com/v1"
 bot = telebot.TeleBot(BOT_TOKEN)
 
-user_sessions = {}
+user_sessions     = {}
 broadcast_sessions = {}
 
 # ─────────────────────────────────────────────
@@ -44,12 +48,12 @@ def cek_saldo():
 def transaksi(ref_id, customer_no, buyer_sku_code):
     sign = digi_sign(DIGI_USERNAME, DIGI_API_KEY, ref_id)
     payload = {
-        "username": DIGI_USERNAME,
+        "username":       DIGI_USERNAME,
         "buyer_sku_code": buyer_sku_code,
-        "customer_no": customer_no,
-        "ref_id": ref_id,
-        "sign": sign,
-        "testing": SANDBOX_MODE
+        "customer_no":    customer_no,
+        "ref_id":         ref_id,
+        "sign":           sign,
+        "testing":        SANDBOX_MODE
     }
     try:
         r = requests.post(f"{DIGI_URL}/transaction", json=payload, timeout=15)
@@ -62,6 +66,21 @@ def buat_ref_id(user_id):
 
 def format_rupiah(angka):
     return f"Rp{int(angka):,}".replace(",", ".")
+
+def validasi_nomor(nomor):
+    """Validasi format nomor HP Indonesia."""
+    nomor = nomor.strip().replace("-", "").replace(" ", "")
+    if nomor.startswith("0"):
+        nomor = "62" + nomor[1:]
+    elif nomor.startswith("+62"):
+        nomor = nomor[1:]
+    if not nomor.startswith("62"):
+        return None
+    if len(nomor) < 10 or len(nomor) > 15:
+        return None
+    if not nomor.isdigit():
+        return None
+    return nomor
 
 # ─────────────────────────────────────────────
 # KEYBOARD HELPERS
@@ -100,8 +119,8 @@ def menu_nominal(operator, kategori="pulsa"):
 def menu_admin():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
-        types.KeyboardButton("📋 Daftar Order"),
         types.KeyboardButton("💰 Cek Saldo"),
+        types.KeyboardButton("📋 Daftar Order"),
         types.KeyboardButton("📊 Statistik"),
         types.KeyboardButton("📢 Broadcast"),
         types.KeyboardButton("🔙 Menu Utama")
@@ -201,7 +220,11 @@ def pilih_nominal(message):
         return
     user_sessions[uid]["produk"] = produk
     user_sessions[uid]["step"] = "input_nomor"
-    bot.send_message(message.chat.id, f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:", parse_mode="Markdown", reply_markup=menu_kembali())
+    bot.send_message(
+        message.chat.id,
+        f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:\n(contoh: 08123456789)",
+        parse_mode="Markdown", reply_markup=menu_kembali()
+    )
 
 # ─────────────────────────────────────────────
 # INPUT NOMOR
@@ -214,11 +237,18 @@ def input_nomor(message):
         user_sessions[uid] = {}
         bot.send_message(message.chat.id, "Menu utama.", reply_markup=menu_utama())
         return
-    sesi = user_sessions.get(uid, {})
+    sesi   = user_sessions.get(uid, {})
     produk = sesi.get("produk", {})
-    nomor = message.text.strip()
+    nomor  = validasi_nomor(message.text.strip())
+    if not nomor:
+        bot.send_message(
+            message.chat.id,
+            "❌ Format nomor tidak valid!\n\nMasukkan nomor HP yang benar:\n"
+            "Contoh: 08123456789 atau 628123456789"
+        )
+        return
     user_sessions[uid]["nomor"] = nomor
-    user_sessions[uid]["step"] = "konfirmasi"
+    user_sessions[uid]["step"]  = "konfirmasi"
     teks = (
         f"📋 *Konfirmasi Order*\n\n"
         f"Produk : {produk['nama']}\n"
@@ -237,29 +267,24 @@ def input_nomor(message):
 
 @bot.message_handler(func=lambda m: m.text in ["YA", "BATAL"] and user_sessions.get(m.from_user.id, {}).get("step") == "konfirmasi")
 def konfirmasi_order(message):
-    uid = message.from_user.id
+    uid  = message.from_user.id
     sesi = user_sessions.get(uid, {})
     if message.text == "BATAL":
         user_sessions[uid] = {}
         bot.send_message(message.chat.id, "Order dibatalkan.", reply_markup=menu_utama())
         return
     produk = sesi.get("produk", {})
-    nomor = sesi.get("nomor")
+    nomor  = sesi.get("nomor")
     ref_id = buat_ref_id(uid)
     user_sessions[uid]["ref_id"] = ref_id
-    user_sessions[uid]["step"] = "menunggu_bayar"
+    user_sessions[uid]["step"]   = "menunggu_bayar"
 
-    # Simpan ke Supabase
     save_order(
-        ref_id=ref_id,
-        user_id=uid,
+        ref_id=ref_id, user_id=uid,
         nama=message.from_user.first_name,
-        tipe=sesi.get("tipe"),
-        operator=sesi.get("operator", "-"),
-        produk=produk.get("nama"),
-        kode=produk.get("kode"),
-        nomor=nomor,
-        harga=produk.get("harga")
+        tipe=sesi.get("tipe"), operator=sesi.get("operator", "-"),
+        produk=produk.get("nama"), kode=produk.get("kode"),
+        nomor=nomor, harga=produk.get("harga")
     )
 
     teks_bayar = (
@@ -269,10 +294,10 @@ def konfirmasi_order(message):
         f"Total  : *{format_rupiah(produk['harga'])}*\n"
         f"Ref ID : `{ref_id}`\n\n"
         f"Transfer ke:\n"
-        f"BCA — [nomor rekening kamu]\n"
-        f"a.n. Andika\n\n"
-        f"Kirim bukti bayar ke admin setelah transfer.\n"
-        f"/admin"
+        f"{BANK_REKENING} — {NO_REKENING}\n"
+        f"a.n. {NAMA_REKENING}\n\n"
+        f"Kirim bukti bayar ke admin setelah transfer:\n"
+        f"@{ADMIN_USERNAME}"
     )
     bot.send_message(message.chat.id, teks_bayar, parse_mode="Markdown", reply_markup=menu_kembali())
 
@@ -283,7 +308,9 @@ def konfirmasi_order(message):
         f"📞 {nomor}\n"
         f"💰 {format_rupiah(produk['harga'])}\n"
         f"Ref ID: `{ref_id}`\n\n"
-        f"Konfirmasi: /konfirmasi_{ref_id}"
+        f"Konfirmasi: /konfirmasi_{ref_id}\n"
+        f"Sukses: /sukses_{ref_id}\n"
+        f"Tolak: /tolak_{ref_id}"
     )
     try:
         bot.send_message(ADMIN_ID, notif, parse_mode="Markdown")
@@ -329,21 +356,23 @@ def proses_cek_transaksi(message):
 @bot.message_handler(func=lambda m: m.text == "ℹ️ Info & Bantuan")
 def info(message):
     teks = (
-        "Info Andika Store\n\n"
-        "Layanan: 24 Jam\n"
-        "Proses: Otomatis dan Cepat\n"
-        "Terpercaya dan Aman\n\n"
-        "Hubungi Admin:\n"
-        "@username_kamu\n"
-        "/admin\n\n"
-        "Website:\n"
-        "https://digi-debug01.github.io/andika-store/"
+        f"ℹ️ Info Andika Store\n\n"
+        f"Layanan: 24 Jam\n"
+        f"Proses: Cepat & Terpercaya\n\n"
+        f"Tersedia:\n"
+        f"📱 Pulsa semua operator\n"
+        f"📶 Paket data\n"
+        f"🎮 Top Up Game (segera hadir)\n\n"
+        f"Hubungi Admin:\n"
+        f"@{ADMIN_USERNAME}\n\n"
+        f"Ref ID transaksi bisa dicek via:\n"
+        f"💳 Cek Transaksi"
     )
     bot.send_message(message.chat.id, teks, reply_markup=menu_utama())
 
 @bot.message_handler(commands=["admin"])
 def hubungi_admin(message):
-    bot.send_message(message.chat.id, "Silakan hubungi admin untuk bantuan.", reply_markup=menu_utama())
+    bot.send_message(message.chat.id, f"Silakan hubungi admin:\n@{ADMIN_USERNAME}", reply_markup=menu_utama())
 
 @bot.message_handler(func=lambda m: m.text == "🔙 Kembali")
 def kembali(message):
@@ -359,7 +388,7 @@ def panel_admin(message):
     if message.from_user.id != ADMIN_ID:
         bot.send_message(message.chat.id, "Akses ditolak.")
         return
-    stats = get_order_stats()
+    stats     = get_order_stats()
     mode_text = "SANDBOX" if SANDBOX_MODE else "PRODUCTION"
     teks = (
         f"PANEL ADMIN — Andika Store\n"
@@ -386,7 +415,7 @@ def daftar_order(message):
         return
     teks = "DAFTAR ORDER (10 terakhir)\n\n"
     for o in orders:
-        icon = {"pending": "⏳", "sukses": "✅", "gagal": "❌", "diproses": "🔄"}.get(o["status"], "❓")
+        icon  = {"pending": "⏳", "sukses": "✅", "gagal": "❌", "diproses": "🔄"}.get(o["status"], "❓")
         teks += f"{icon} {o['ref_id']}\n{o['nama']} | {o['produk']}\n{o['nomor']} | {format_rupiah(o['harga'])}\n\n"
     bot.send_message(message.chat.id, teks, reply_markup=menu_admin())
 
@@ -394,7 +423,7 @@ def daftar_order(message):
 def statistik(message):
     stats = get_order_stats()
     saldo = cek_saldo()
-    teks = (
+    teks  = (
         f"STATISTIK ANDIKA STORE\n\n"
         f"Total Order : {stats['total']}\n"
         f"Sukses      : {stats['sukses']}\n"
@@ -420,7 +449,7 @@ def kirim_broadcast(message):
         bot.send_message(message.chat.id, "Broadcast dibatalkan.", reply_markup=menu_admin())
         return
     broadcast_sessions.pop(message.from_user.id, None)
-    users = get_all_users()
+    users    = get_all_users()
     berhasil = gagal_kirim = 0
     for uid in users:
         try:
@@ -449,7 +478,7 @@ def konfirmasi_bayar(message):
         return
     update_order_status(ref_id, "diproses")
     try:
-        bot.send_message(order["user_id"], f"Pembayaran dikonfirmasi!\nRef ID: {ref_id}\nOrder sedang diproses...")
+        bot.send_message(order["user_id"], f"✅ Pembayaran dikonfirmasi!\nRef ID: {ref_id}\nOrder sedang diproses...")
     except:
         pass
     bot.send_message(message.chat.id, f"Order {ref_id} dikonfirmasi!", reply_markup=menu_admin())
@@ -467,19 +496,38 @@ def order_sukses(message):
     if not order:
         bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan.")
         return
-    update_order_status(ref_id, "sukses")
-    try:
-        bot.send_message(order["user_id"], f"Order Berhasil!\n\nRef ID : {ref_id}\nProduk : {order['produk']}\nNomor  : {order['nomor']}\nStatus : SUKSES\n\nTerima kasih sudah belanja di Andika Store!")
-    except:
-        pass
-    bot.send_message(message.chat.id, f"Order {ref_id} ditandai SUKSES!", reply_markup=menu_admin())
+
+    # Proses transaksi ke Digiflazz
+    hasil = transaksi(ref_id, order["nomor"], order["kode"])
+    data  = hasil.get("data", {})
+    rc    = data.get("rc", "")
+    pesan = data.get("message", "")
+
+    if rc == "00":
+        update_order_status(ref_id, "sukses")
+        try:
+            bot.send_message(
+                order["user_id"],
+                f"✅ Order Berhasil!\n\n"
+                f"Ref ID : {ref_id}\n"
+                f"Produk : {order['produk']}\n"
+                f"Nomor  : {order['nomor']}\n"
+                f"Status : SUKSES\n\n"
+                f"Terima kasih sudah belanja di Andika Store!"
+            )
+        except:
+            pass
+        bot.send_message(message.chat.id, f"✅ Order {ref_id} berhasil diproses!", reply_markup=menu_admin())
+    else:
+        update_order_status(ref_id, "gagal")
+        bot.send_message(message.chat.id, f"❌ Transaksi gagal!\nRC: {rc}\nPesan: {pesan}", reply_markup=menu_admin())
 
 @bot.message_handler(commands=["tolak"])
 def order_tolak(message):
     if message.from_user.id != ADMIN_ID:
         return
     try:
-        parts = message.text.split("_", 2)
+        parts  = message.text.split("_", 2)
         ref_id = parts[1]
         alasan = parts[2] if len(parts) > 2 else "Pembayaran tidak diterima"
     except:
@@ -491,7 +539,13 @@ def order_tolak(message):
         return
     update_order_status(ref_id, "gagal")
     try:
-        bot.send_message(order["user_id"], f"Order Ditolak\n\nRef ID : {ref_id}\nAlasan : {alasan}\n\nHubungi admin: /admin")
+        bot.send_message(
+            order["user_id"],
+            f"❌ Order Ditolak\n\n"
+            f"Ref ID : {ref_id}\n"
+            f"Alasan : {alasan}\n\n"
+            f"Hubungi admin: @{ADMIN_USERNAME}"
+        )
     except:
         pass
     bot.send_message(message.chat.id, f"Order {ref_id} ditolak!", reply_markup=menu_admin())
@@ -499,6 +553,7 @@ def order_tolak(message):
 # ─────────────────────────────────────────────
 # JALANKAN BOT
 # ─────────────────────────────────────────────
+init_db()
 print("Andika Store Bot berjalan...")
 print(f"Mode: {'SANDBOX' if SANDBOX_MODE else 'PRODUCTION'}")
 print(f"Produk: {sum(len(v) for v in PRODUCTS['pulsa'].values())} pulsa, {sum(len(v) for v in PRODUCTS['data'].values())} data")
