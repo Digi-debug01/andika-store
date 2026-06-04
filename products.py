@@ -87,3 +87,36 @@ HARGA_OFFLINE = {
     "SMT2":   4009,   "SMT3":   5006,   "SMT4":   6003,
     "SMT5":   7205,   "SMT10":  12040,  "SMT15":  16980,  "SMT100": 51855,
 }
+
+# Update bagian data di PRODUCTS
+PRODUCTS["data"] = {
+    "Telkomsel": [
+        {"kode": "DTSL1G3H",  "nama": "Telkomsel 1GB 3 Hari",  "harga": 9555},
+        {"kode": "DTSL2G3H",  "nama": "Telkomsel 2GB 3 Hari",  "harga": 11855},
+        {"kode": "DTSL1G7H",  "nama": "Telkomsel 1GB 7 Hari",  "harga": 10655},
+        {"kode": "DTSL1G15H", "nama": "Telkomsel 1GB 15 Hari", "harga": 11755},
+    ],
+    "Indosat": [
+        {"kode": "DISATF1.5G1",  "nama": "Indosat 1.5GB 1 Hari",   "harga": 7865},
+        {"kode": "DISATF5G1H",   "nama": "Indosat 5GB 1 Hari",     "harga": 7755},
+        {"kode": "DISATF1G2H",   "nama": "Indosat 1GB 2 Hari",     "harga": 9910},
+        {"kode": "DISATF2.5G3",  "nama": "Indosat 2.5GB 3 Hari",   "harga": 8000},
+        {"kode": "DISATF1.5G3",  "nama": "Indosat 1.5GB 3 Hari",   "harga": 12730},
+        {"kode": "DISATF3G3H",   "nama": "Indosat 3GB 3 Hari",     "harga": 12705},
+        {"kode": "DISATF1.5G5",  "nama": "Indosat 1.5GB 5 Hari",   "harga": 9945},
+        {"kode": "DISATF2G5H",   "nama": "Indosat 2GB 5 Hari",     "harga": 13932},
+        {"kode": "DISATF2.5G5",  "nama": "Indosat 2.5GB 5 Hari",   "harga": 13920},
+        {"kode": "DISATF10G5",   "nama": "Indosat 10GB 5 Hari",    "harga": 13740},
+        {"kode": "DISATF2G15",   "nama": "Indosat 2GB 15 Hari",    "harga": 12430},
+        {"kode": "DISATF1.5G28", "nama": "Indosat 1.5GB 28 Hari",  "harga": 11030},
+        {"kode": "DISATF7G7H",   "nama": "Indosat 7GB 7 Hari",     "harga": 23435},
+        {"kode": "DISATF3G28",   "nama": "Indosat 3GB 28 Hari",    "harga": 26510},
+        {"kode": "DISATF5.5G28", "nama": "Indosat 5.5GB 28 Hari",  "harga": 35545},
+    ],
+}
+
+# Update SKU_MAP dengan produk data
+for kategori, operators in PRODUCTS.items():
+    for operator, items in operators.items():
+        for item in items:
+            SKU_MAP[item["kode"]] = {**item, "operator": operator, "kategori": kategori}

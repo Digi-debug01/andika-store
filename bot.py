@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 from telebot import types
 from datetime import datetime
 from products import PRODUCTS, SKU_MAP
+from database import (save_user, get_all_users, count_users,
+                      save_order, get_order, update_order_status,
+                      get_recent_orders, get_order_stats)
 
 load_dotenv()
 
@@ -13,17 +16,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 DIGI_USERNAME = os.getenv("DIGI_USERNAME", "")
 DIGI_API_KEY = os.getenv("DIGI_API_KEY", "")
-SANDBOX_MODE = True  # Ganti False setelah deposit saldo
+SANDBOX_MODE = os.getenv("SANDBOX_MODE", "True") == "True"
 
 DIGI_URL = "https://api.digiflazz.com/v1"
-
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# ─────────────────────────────────────────────
-# DATABASE SEMENTARA
-# ─────────────────────────────────────────────
-order_db = {}
-user_db = {}
 user_sessions = {}
 broadcast_sessions = {}
 
@@ -88,19 +85,15 @@ def menu_kembali():
 
 def menu_operator_pulsa():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
-    operators = list(PRODUCTS["pulsa"].keys())
-    for op in operators:
+    for op in PRODUCTS["pulsa"].keys():
         markup.add(types.KeyboardButton(op))
     markup.add(types.KeyboardButton("🔙 Kembali"))
     return markup
 
 def menu_nominal(operator, kategori="pulsa"):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    items = PRODUCTS[kategori].get(operator, [])
-    for item in items:
-        markup.add(types.KeyboardButton(
-            f"{item['nama']} - {format_rupiah(item['harga'])}"
-        ))
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+    for item in PRODUCTS[kategori].get(operator, []):
+        markup.add(types.KeyboardButton(f"{item['nama']} - {format_rupiah(item['harga'])}"))
     markup.add(types.KeyboardButton("🔙 Kembali"))
     return markup
 
@@ -122,16 +115,13 @@ def menu_admin():
 @bot.message_handler(commands=["start"])
 def start(message):
     uid = message.from_user.id
-    user_db[uid] = {
-        "nama": message.from_user.first_name,
-        "username": message.from_user.username or "-"
-    }
+    save_user(uid, message.from_user.first_name, message.from_user.username)
     user_sessions[uid] = {}
     mode_text = "🧪 MODE TESTING" if SANDBOX_MODE else "🟢 LIVE"
     teks = (
         f"👋 Halo, *{message.from_user.first_name}*!\n\n"
         f"Selamat datang di *Andika Store* {mode_text}\n"
-        f"🛒 Pulsa, Paket Data & Top Up Game!\n\n"
+        f"Pulsa, Paket Data & Top Up Game!\n\n"
         f"Silakan pilih menu:"
     )
     bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=menu_utama())
@@ -144,38 +134,56 @@ def start(message):
 def menu_pulsa(message):
     uid = message.from_user.id
     user_sessions[uid] = {"tipe": "pulsa"}
-    bot.send_message(
-        message.chat.id,
-        "📱 *Pulsa*\nPilih operator:",
-        parse_mode="Markdown",
-        reply_markup=menu_operator_pulsa()
-    )
+    bot.send_message(message.chat.id, "📱 *Pulsa*\nPilih operator:", parse_mode="Markdown", reply_markup=menu_operator_pulsa())
 
 @bot.message_handler(func=lambda m: m.text in PRODUCTS["pulsa"].keys())
 def pilih_operator_pulsa(message):
     uid = message.from_user.id
-    sesi = user_sessions.get(uid, {})
-    if sesi.get("tipe") != "pulsa":
+    if user_sessions.get(uid, {}).get("tipe") != "pulsa":
         return
-    operator = message.text
-    user_sessions[uid]["operator"] = operator
+    user_sessions[uid]["operator"] = message.text
     user_sessions[uid]["step"] = "pilih_nominal"
-    bot.send_message(
-        message.chat.id,
-        f"📱 *Pulsa {operator}*\nPilih nominal:",
-        parse_mode="Markdown",
-        reply_markup=menu_nominal(operator, "pulsa")
-    )
+    bot.send_message(message.chat.id, f"📱 *Pulsa {message.text}*\nPilih nominal:", parse_mode="Markdown", reply_markup=menu_nominal(message.text, "pulsa"))
 
 # ─────────────────────────────────────────────
-# HANDLER PILIH NOMINAL
+# MENU PAKET DATA
+# ─────────────────────────────────────────────
+
+@bot.message_handler(func=lambda m: m.text == "📶 Paket Data")
+def menu_paket(message):
+    uid = message.from_user.id
+    user_sessions[uid] = {"tipe": "data"}
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    for op in PRODUCTS["data"].keys():
+        markup.add(types.KeyboardButton(f"📶 {op}"))
+    markup.add(types.KeyboardButton("🔙 Kembali"))
+    bot.send_message(message.chat.id, "📶 *Paket Data*\nPilih operator:", parse_mode="Markdown", reply_markup=markup)
+
+@bot.message_handler(func=lambda m: m.text in [f"📶 {op}" for op in PRODUCTS["data"].keys()])
+def pilih_operator_data(message):
+    uid = message.from_user.id
+    if user_sessions.get(uid, {}).get("tipe") != "data":
+        return
+    operator = message.text.replace("📶 ", "")
+    user_sessions[uid]["operator"] = operator
+    user_sessions[uid]["step"] = "pilih_nominal"
+    bot.send_message(message.chat.id, f"📶 *Paket Data {operator}*\nPilih paket:", parse_mode="Markdown", reply_markup=menu_nominal(operator, "data"))
+
+# ─────────────────────────────────────────────
+# MENU GAME
+# ─────────────────────────────────────────────
+
+@bot.message_handler(func=lambda m: m.text == "🎮 Top Up Game")
+def menu_game(message):
+    bot.send_message(message.chat.id, "🎮 Top Up Game\n\nSegera hadir! Hubungi admin untuk sementara:\n/admin", reply_markup=menu_utama())
+
+# ─────────────────────────────────────────────
+# PILIH NOMINAL
 # ─────────────────────────────────────────────
 
 def get_produk_dari_teks(teks, operator, kategori):
-    items = PRODUCTS[kategori].get(operator, [])
-    for item in items:
-        label = f"{item['nama']} - {format_rupiah(item['harga'])}"
-        if teks == label:
+    for item in PRODUCTS[kategori].get(operator, []):
+        if teks == f"{item['nama']} - {format_rupiah(item['harga'])}":
             return item
     return None
 
@@ -183,28 +191,17 @@ def get_produk_dari_teks(teks, operator, kategori):
 def pilih_nominal(message):
     uid = message.from_user.id
     sesi = user_sessions.get(uid, {})
-    operator = sesi.get("operator")
-    kategori = sesi.get("tipe", "pulsa")
-
     if message.text == "🔙 Kembali":
         user_sessions[uid] = {}
-        bot.send_message(message.chat.id, "🏠 Menu utama.", reply_markup=menu_utama())
+        bot.send_message(message.chat.id, "Menu utama.", reply_markup=menu_utama())
         return
-
-    produk = get_produk_dari_teks(message.text, operator, kategori)
+    produk = get_produk_dari_teks(message.text, sesi.get("operator"), sesi.get("tipe", "pulsa"))
     if not produk:
-        bot.send_message(message.chat.id, "❌ Produk tidak ditemukan, pilih dari menu.")
+        bot.send_message(message.chat.id, "Pilih dari menu yang tersedia.")
         return
-
     user_sessions[uid]["produk"] = produk
     user_sessions[uid]["step"] = "input_nomor"
-
-    bot.send_message(
-        message.chat.id,
-        f"📱 *{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:",
-        parse_mode="Markdown",
-        reply_markup=menu_kembali()
-    )
+    bot.send_message(message.chat.id, f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:", parse_mode="Markdown", reply_markup=menu_kembali())
 
 # ─────────────────────────────────────────────
 # INPUT NOMOR
@@ -215,21 +212,19 @@ def input_nomor(message):
     uid = message.from_user.id
     if message.text == "🔙 Kembali":
         user_sessions[uid] = {}
-        bot.send_message(message.chat.id, "🏠 Menu utama.", reply_markup=menu_utama())
+        bot.send_message(message.chat.id, "Menu utama.", reply_markup=menu_utama())
         return
-
     sesi = user_sessions.get(uid, {})
     produk = sesi.get("produk", {})
     nomor = message.text.strip()
     user_sessions[uid]["nomor"] = nomor
     user_sessions[uid]["step"] = "konfirmasi"
-
     teks = (
         f"📋 *Konfirmasi Order*\n\n"
         f"Produk : {produk['nama']}\n"
         f"Nomor  : `{nomor}`\n"
         f"Harga  : *{format_rupiah(produk['harga'])}*\n\n"
-        f"⚠️ Pastikan nomor sudah benar!\n"
+        f"Pastikan nomor sudah benar!\n"
         f"Ketik *YA* untuk lanjut atau *BATAL*"
     )
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -244,31 +239,28 @@ def input_nomor(message):
 def konfirmasi_order(message):
     uid = message.from_user.id
     sesi = user_sessions.get(uid, {})
-
     if message.text == "BATAL":
         user_sessions[uid] = {}
-        bot.send_message(message.chat.id, "❌ Order dibatalkan.", reply_markup=menu_utama())
+        bot.send_message(message.chat.id, "Order dibatalkan.", reply_markup=menu_utama())
         return
-
     produk = sesi.get("produk", {})
     nomor = sesi.get("nomor")
     ref_id = buat_ref_id(uid)
     user_sessions[uid]["ref_id"] = ref_id
     user_sessions[uid]["step"] = "menunggu_bayar"
 
-    # Simpan ke order_db
-    order_db[ref_id] = {
-        "user_id": uid,
-        "nama": message.from_user.first_name,
-        "tipe": sesi.get("tipe"),
-        "operator": sesi.get("operator", "-"),
-        "produk": produk.get("nama"),
-        "kode": produk.get("kode"),
-        "nomor": nomor,
-        "harga": produk.get("harga"),
-        "status": "pending",
-        "waktu": datetime.now().strftime("%d/%m/%Y %H:%M")
-    }
+    # Simpan ke Supabase
+    save_order(
+        ref_id=ref_id,
+        user_id=uid,
+        nama=message.from_user.first_name,
+        tipe=sesi.get("tipe"),
+        operator=sesi.get("operator", "-"),
+        produk=produk.get("nama"),
+        kode=produk.get("kode"),
+        nomor=nomor,
+        harga=produk.get("harga")
+    )
 
     teks_bayar = (
         f"💳 *Informasi Pembayaran*\n\n"
@@ -277,21 +269,20 @@ def konfirmasi_order(message):
         f"Total  : *{format_rupiah(produk['harga'])}*\n"
         f"Ref ID : `{ref_id}`\n\n"
         f"Transfer ke:\n"
-        f"🏦 *BCA* — 1234567890\n"
-        f"👤 a.n. *Andika*\n\n"
-        f"_Kirim bukti bayar ke admin setelah transfer._\n"
+        f"BCA — [nomor rekening kamu]\n"
+        f"a.n. Andika\n\n"
+        f"Kirim bukti bayar ke admin setelah transfer.\n"
         f"/admin"
     )
     bot.send_message(message.chat.id, teks_bayar, parse_mode="Markdown", reply_markup=menu_kembali())
 
-    # Notif admin
     notif = (
         f"🔔 *ORDER BARU!*\n\n"
         f"👤 {message.from_user.first_name} (@{message.from_user.username or '-'})\n"
         f"📦 {produk['nama']}\n"
-        f"📞 Nomor: `{nomor}`\n"
-        f"💰 Harga: {format_rupiah(produk['harga'])}\n"
-        f"🧾 Ref ID: `{ref_id}`\n\n"
+        f"📞 {nomor}\n"
+        f"💰 {format_rupiah(produk['harga'])}\n"
+        f"Ref ID: `{ref_id}`\n\n"
         f"Konfirmasi: /konfirmasi_{ref_id}"
     )
     try:
@@ -300,83 +291,64 @@ def konfirmasi_order(message):
         pass
 
 # ─────────────────────────────────────────────
-# MENU LAINNYA
+# CEK TRANSAKSI
 # ─────────────────────────────────────────────
-
-@bot.message_handler(func=lambda m: m.text == "📶 Paket Data")
-def menu_paket(message):
-    bot.send_message(
-        message.chat.id,
-        "📶 *Paket Data*\n\n_Segera hadir! Saat ini sedang dalam persiapan._\n\nUntuk sementara hubungi admin:",
-        parse_mode="Markdown",
-        reply_markup=menu_utama()
-    )
-
-@bot.message_handler(func=lambda m: m.text == "🎮 Top Up Game")
-def menu_game(message):
-    bot.send_message(
-        message.chat.id,
-        "🎮 *Top Up Game*\n\n_Segera hadir! Saat ini sedang dalam persiapan._\n\nUntuk sementara hubungi admin:",
-        parse_mode="Markdown",
-        reply_markup=menu_utama()
-    )
-
-@bot.message_handler(func=lambda m: m.text == "🔙 Kembali")
-def kembali(message):
-    user_sessions[message.from_user.id] = {}
-    bot.send_message(message.chat.id, "🏠 Menu utama.", reply_markup=menu_utama())
-
-@bot.message_handler(func=lambda m: m.text == "ℹ️ Info & Bantuan")
-def info(message):
-    teks = (
-        "ℹ️ *Info Andika Store*\n\n"
-        "🕐 Layanan: 24 Jam\n"
-        "⚡ Proses: Otomatis & Cepat\n"
-        "✅ Terpercaya & Aman\n\n"
-        "📞 @Alfatih04\n"
-        "/admin\n\n"
-        "🌐 *Website:*\n"
-        "https://digi-debug01.github.io/andika-store/"
-    )
-    bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=menu_utama())
-
-@bot.message_handler(commands=["admin"])
-def hubungi_admin(message):
-    bot.send_message(message.chat.id, "📞 Silakan hubungi admin untuk bantuan.", reply_markup=menu_utama())
 
 @bot.message_handler(func=lambda m: m.text == "💳 Cek Transaksi")
 def cek_transaksi(message):
-    bot.send_message(
-        message.chat.id,
-        "🔍 Masukkan *Ref ID* transaksi kamu:\n(contoh: AS1234567890)",
-        parse_mode="Markdown",
-        reply_markup=menu_kembali()
-    )
+    bot.send_message(message.chat.id, "Masukkan Ref ID transaksi kamu:\n(contoh: AS1234567890)", reply_markup=menu_kembali())
     user_sessions[message.from_user.id] = {"step": "cek_transaksi"}
 
 @bot.message_handler(func=lambda m: user_sessions.get(m.from_user.id, {}).get("step") == "cek_transaksi")
 def proses_cek_transaksi(message):
     if message.text == "🔙 Kembali":
         user_sessions[message.from_user.id] = {}
-        bot.send_message(message.chat.id, "🏠 Menu utama.", reply_markup=menu_utama())
+        bot.send_message(message.chat.id, "Menu utama.", reply_markup=menu_utama())
         return
-    ref_id = message.text.strip()
-    order = order_db.get(ref_id)
+    order = get_order(message.text.strip())
     if not order:
-        bot.send_message(message.chat.id, "❌ Ref ID tidak ditemukan.", reply_markup=menu_utama())
+        bot.send_message(message.chat.id, "Ref ID tidak ditemukan.", reply_markup=menu_utama())
         return
-    status_icon = {"pending": "⏳", "sukses": "✅", "gagal": "❌", "diproses": "🔄"}.get(order["status"], "❓")
+    icon = {"pending": "⏳", "sukses": "✅", "gagal": "❌", "diproses": "🔄"}.get(order["status"], "❓")
     teks = (
-        f"🔍 *Status Transaksi*\n\n"
-        f"Ref ID  : `{ref_id}`\n"
+        f"Status Transaksi\n\n"
+        f"Ref ID  : {order['ref_id']}\n"
         f"Produk  : {order['produk']}\n"
-        f"Nomor   : `{order['nomor']}`\n"
+        f"Nomor   : {order['nomor']}\n"
         f"Harga   : {format_rupiah(order['harga'])}\n"
-        f"Status  : {status_icon} {order['status'].upper()}\n"
-        f"Waktu   : {order['waktu']}"
+        f"Status  : {icon} {order['status'].upper()}\n"
+        f"Waktu   : {order['created_at'][:16]}"
     )
-    bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=menu_utama())
+    bot.send_message(message.chat.id, teks, reply_markup=menu_utama())
     user_sessions[message.from_user.id] = {}
+
+# ─────────────────────────────────────────────
+# INFO
+# ─────────────────────────────────────────────
+
+@bot.message_handler(func=lambda m: m.text == "ℹ️ Info & Bantuan")
+def info(message):
+    teks = (
+        "Info Andika Store\n\n"
+        "Layanan: 24 Jam\n"
+        "Proses: Otomatis dan Cepat\n"
+        "Terpercaya dan Aman\n\n"
+        "Hubungi Admin:\n"
+        "@username_kamu\n"
+        "/admin\n\n"
+        "Website:\n"
+        "https://digi-debug01.github.io/andika-store/"
+    )
+    bot.send_message(message.chat.id, teks, reply_markup=menu_utama())
+
+@bot.message_handler(commands=["admin"])
+def hubungi_admin(message):
+    bot.send_message(message.chat.id, "Silakan hubungi admin untuk bantuan.", reply_markup=menu_utama())
+
+@bot.message_handler(func=lambda m: m.text == "🔙 Kembali")
+def kembali(message):
+    user_sessions[message.from_user.id] = {}
+    bot.send_message(message.chat.id, "Menu utama.", reply_markup=menu_utama())
 
 # ─────────────────────────────────────────────
 # PANEL ADMIN
@@ -385,87 +357,82 @@ def proses_cek_transaksi(message):
 @bot.message_handler(commands=["panel"])
 def panel_admin(message):
     if message.from_user.id != ADMIN_ID:
-        bot.send_message(message.chat.id, "⛔ Akses ditolak.")
+        bot.send_message(message.chat.id, "Akses ditolak.")
         return
-    mode_text = "🧪 SANDBOX" if SANDBOX_MODE else "🟢 PRODUCTION"
+    stats = get_order_stats()
+    mode_text = "SANDBOX" if SANDBOX_MODE else "PRODUCTION"
     teks = (
-        f"🛠️ *PANEL ADMIN — Andika Store*\n"
-        f"{'─' * 28}\n"
+        f"PANEL ADMIN — Andika Store\n"
         f"Mode        : {mode_text}\n"
-        f"Total Order : {len(order_db)}\n"
-        f"Total User  : {len(user_db)}\n\n"
+        f"Total Order : {stats['total']}\n"
+        f"Total User  : {count_users()}\n\n"
         f"Pilih menu:"
     )
-    bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=menu_admin())
+    bot.send_message(message.chat.id, teks, reply_markup=menu_admin())
 
 @bot.message_handler(func=lambda m: m.text == "💰 Cek Saldo" and m.from_user.id == ADMIN_ID)
 def cek_saldo_admin(message):
-    bot.send_message(message.chat.id, "⏳ Mengecek saldo...")
     saldo = cek_saldo()
     if saldo is not None:
-        bot.send_message(message.chat.id, f"💰 Saldo Digiflazz: *{format_rupiah(saldo)}*", parse_mode="Markdown")
+        bot.send_message(message.chat.id, f"Saldo Digiflazz: {format_rupiah(saldo)}")
     else:
-        bot.send_message(message.chat.id, "❌ Gagal cek saldo.")
+        bot.send_message(message.chat.id, "Gagal cek saldo.")
 
 @bot.message_handler(func=lambda m: m.text == "📋 Daftar Order" and m.from_user.id == ADMIN_ID)
 def daftar_order(message):
-    if not order_db:
-        bot.send_message(message.chat.id, "📭 Belum ada order.", reply_markup=menu_admin())
+    orders = get_recent_orders(10)
+    if not orders:
+        bot.send_message(message.chat.id, "Belum ada order.", reply_markup=menu_admin())
         return
-    teks = "📋 *DAFTAR ORDER* (10 terakhir)\n" + "─" * 28 + "\n\n"
-    for ref, o in list(order_db.items())[-10:]:
+    teks = "DAFTAR ORDER (10 terakhir)\n\n"
+    for o in orders:
         icon = {"pending": "⏳", "sukses": "✅", "gagal": "❌", "diproses": "🔄"}.get(o["status"], "❓")
-        teks += f"{icon} `{ref}`\n👤 {o['nama']} | {o['produk']}\n📞 {o['nomor']} | {format_rupiah(o['harga'])}\n🕐 {o['waktu']}\n\n"
-    bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=menu_admin())
+        teks += f"{icon} {o['ref_id']}\n{o['nama']} | {o['produk']}\n{o['nomor']} | {format_rupiah(o['harga'])}\n\n"
+    bot.send_message(message.chat.id, teks, reply_markup=menu_admin())
 
 @bot.message_handler(func=lambda m: m.text == "📊 Statistik" and m.from_user.id == ADMIN_ID)
 def statistik(message):
-    total = len(order_db)
-    sukses = sum(1 for o in order_db.values() if o["status"] == "sukses")
-    pending = sum(1 for o in order_db.values() if o["status"] == "pending")
-    gagal = sum(1 for o in order_db.values() if o["status"] == "gagal")
-    diproses = sum(1 for o in order_db.values() if o["status"] == "diproses")
-    omzet = sum(o["harga"] for o in order_db.values() if o["status"] == "sukses")
+    stats = get_order_stats()
     saldo = cek_saldo()
     teks = (
-        f"📊 *STATISTIK ANDIKA STORE*\n"
-        f"{'─' * 28}\n\n"
-        f"📦 Total Order : {total}\n"
-        f"✅ Sukses      : {sukses}\n"
-        f"🔄 Diproses    : {diproses}\n"
-        f"⏳ Pending     : {pending}\n"
-        f"❌ Gagal       : {gagal}\n\n"
-        f"💵 Total Omzet : {format_rupiah(omzet)}\n"
-        f"👥 Total User  : {len(user_db)}\n"
-        f"💰 Saldo Digi  : {format_rupiah(saldo) if saldo else 'Gagal ambil'}\n\n"
-        f"Mode: {'🧪 SANDBOX' if SANDBOX_MODE else '🟢 PRODUCTION'}"
+        f"STATISTIK ANDIKA STORE\n\n"
+        f"Total Order : {stats['total']}\n"
+        f"Sukses      : {stats['sukses']}\n"
+        f"Diproses    : {stats['diproses']}\n"
+        f"Pending     : {stats['pending']}\n"
+        f"Gagal       : {stats['gagal']}\n\n"
+        f"Total Omzet : {format_rupiah(stats['omzet'])}\n"
+        f"Total User  : {count_users()}\n"
+        f"Saldo Digi  : {format_rupiah(saldo) if saldo else 'Gagal ambil'}\n\n"
+        f"Mode: {'SANDBOX' if SANDBOX_MODE else 'PRODUCTION'}"
     )
-    bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=menu_admin())
+    bot.send_message(message.chat.id, teks, reply_markup=menu_admin())
 
 @bot.message_handler(func=lambda m: m.text == "📢 Broadcast" and m.from_user.id == ADMIN_ID)
 def broadcast_menu(message):
     broadcast_sessions[message.from_user.id] = True
-    bot.send_message(message.chat.id, "📢 Ketik pesan broadcast:\n_(ketik /batal untuk membatalkan)_", parse_mode="Markdown", reply_markup=menu_kembali())
+    bot.send_message(message.chat.id, "Ketik pesan broadcast:\n(ketik /batal untuk membatalkan)", reply_markup=menu_kembali())
 
 @bot.message_handler(func=lambda m: broadcast_sessions.get(m.from_user.id) and m.from_user.id == ADMIN_ID)
 def kirim_broadcast(message):
     if message.text in ["/batal", "🔙 Kembali"]:
         broadcast_sessions.pop(message.from_user.id, None)
-        bot.send_message(message.chat.id, "❌ Broadcast dibatalkan.", reply_markup=menu_admin())
+        bot.send_message(message.chat.id, "Broadcast dibatalkan.", reply_markup=menu_admin())
         return
     broadcast_sessions.pop(message.from_user.id, None)
+    users = get_all_users()
     berhasil = gagal_kirim = 0
-    for uid in user_db:
+    for uid in users:
         try:
-            bot.send_message(uid, f"📢 *INFO ANDIKA STORE*\n\n{message.text}", parse_mode="Markdown")
+            bot.send_message(uid, f"INFO ANDIKA STORE\n\n{message.text}")
             berhasil += 1
         except:
             gagal_kirim += 1
-    bot.send_message(message.chat.id, f"📢 Broadcast selesai!\n✅ {berhasil} berhasil\n❌ {gagal_kirim} gagal", reply_markup=menu_admin())
+    bot.send_message(message.chat.id, f"Broadcast selesai!\nBerhasil: {berhasil}\nGagal: {gagal_kirim}", reply_markup=menu_admin())
 
 @bot.message_handler(func=lambda m: m.text == "🔙 Menu Utama" and m.from_user.id == ADMIN_ID)
-def kembali_menu_utama_admin(message):
-    bot.send_message(message.chat.id, "🏠 Menu utama.", reply_markup=menu_utama())
+def kembali_admin(message):
+    bot.send_message(message.chat.id, "Menu utama.", reply_markup=menu_utama())
 
 @bot.message_handler(commands=["konfirmasi"])
 def konfirmasi_bayar(message):
@@ -476,15 +443,16 @@ def konfirmasi_bayar(message):
     except:
         bot.send_message(message.chat.id, "Format: /konfirmasi_REFID")
         return
-    if ref_id not in order_db:
-        bot.send_message(message.chat.id, f"❌ Order `{ref_id}` tidak ditemukan.", parse_mode="Markdown")
+    order = get_order(ref_id)
+    if not order:
+        bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan.")
         return
-    order_db[ref_id]["status"] = "diproses"
+    update_order_status(ref_id, "diproses")
     try:
-        bot.send_message(order_db[ref_id]["user_id"], f"✅ Pembayaran dikonfirmasi!\nRef ID: `{ref_id}`\nOrder sedang diproses... 🙏", parse_mode="Markdown")
+        bot.send_message(order["user_id"], f"Pembayaran dikonfirmasi!\nRef ID: {ref_id}\nOrder sedang diproses...")
     except:
         pass
-    bot.send_message(message.chat.id, f"✅ Order `{ref_id}` dikonfirmasi!", parse_mode="Markdown", reply_markup=menu_admin())
+    bot.send_message(message.chat.id, f"Order {ref_id} dikonfirmasi!", reply_markup=menu_admin())
 
 @bot.message_handler(commands=["sukses"])
 def order_sukses(message):
@@ -495,16 +463,16 @@ def order_sukses(message):
     except:
         bot.send_message(message.chat.id, "Format: /sukses_REFID")
         return
-    if ref_id not in order_db:
-        bot.send_message(message.chat.id, f"❌ Order `{ref_id}` tidak ditemukan.", parse_mode="Markdown")
+    order = get_order(ref_id)
+    if not order:
+        bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan.")
         return
-    order = order_db[ref_id]
-    order_db[ref_id]["status"] = "sukses"
+    update_order_status(ref_id, "sukses")
     try:
-        bot.send_message(order["user_id"], f"🎉 *Order Berhasil!*\n\nRef ID : `{ref_id}`\nProduk : {order['produk']}\nNomor  : `{order['nomor']}`\nStatus : ✅ SUKSES\n\nTerima kasih sudah belanja di *Andika Store*! 🙏", parse_mode="Markdown")
+        bot.send_message(order["user_id"], f"Order Berhasil!\n\nRef ID : {ref_id}\nProduk : {order['produk']}\nNomor  : {order['nomor']}\nStatus : SUKSES\n\nTerima kasih sudah belanja di Andika Store!")
     except:
         pass
-    bot.send_message(message.chat.id, f"✅ Order `{ref_id}` ditandai SUKSES!", parse_mode="Markdown", reply_markup=menu_admin())
+    bot.send_message(message.chat.id, f"Order {ref_id} ditandai SUKSES!", reply_markup=menu_admin())
 
 @bot.message_handler(commands=["tolak"])
 def order_tolak(message):
@@ -517,21 +485,21 @@ def order_tolak(message):
     except:
         bot.send_message(message.chat.id, "Format: /tolak_REFID_alasan")
         return
-    if ref_id not in order_db:
-        bot.send_message(message.chat.id, f"❌ Order `{ref_id}` tidak ditemukan.", parse_mode="Markdown")
+    order = get_order(ref_id)
+    if not order:
+        bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan.")
         return
-    order = order_db[ref_id]
-    order_db[ref_id]["status"] = "gagal"
+    update_order_status(ref_id, "gagal")
     try:
-        bot.send_message(order["user_id"], f"❌ *Order Ditolak*\n\nRef ID : `{ref_id}`\nAlasan : {alasan}\n\nHubungi admin: /admin", parse_mode="Markdown")
+        bot.send_message(order["user_id"], f"Order Ditolak\n\nRef ID : {ref_id}\nAlasan : {alasan}\n\nHubungi admin: /admin")
     except:
         pass
-    bot.send_message(message.chat.id, f"❌ Order `{ref_id}` ditolak!", parse_mode="Markdown", reply_markup=menu_admin())
+    bot.send_message(message.chat.id, f"Order {ref_id} ditolak!", reply_markup=menu_admin())
 
 # ─────────────────────────────────────────────
 # JALANKAN BOT
 # ─────────────────────────────────────────────
-print("🚀 Andika Store Bot berjalan...")
-print(f"Mode: {'🧪 SANDBOX' if SANDBOX_MODE else '🟢 PRODUCTION'}")
-print(f"Produk tersedia: {sum(len(v) for v in PRODUCTS['pulsa'].values())} pulsa")
+print("Andika Store Bot berjalan...")
+print(f"Mode: {'SANDBOX' if SANDBOX_MODE else 'PRODUCTION'}")
+print(f"Produk: {sum(len(v) for v in PRODUCTS['pulsa'].values())} pulsa, {sum(len(v) for v in PRODUCTS['data'].values())} data")
 bot.infinity_polling()
