@@ -25,7 +25,7 @@ BANK_REKENING = os.getenv("BANK_REKENING", "BCA")
 DIGI_URL = "https://api.digiflazz.com/v1"
 bot = telebot.TeleBot(BOT_TOKEN)
 
-user_sessions     = {}
+user_sessions      = {}
 broadcast_sessions = {}
 
 # ─────────────────────────────────────────────
@@ -61,6 +61,23 @@ def transaksi(ref_id, customer_no, buyer_sku_code):
     except Exception as e:
         return {"data": {"rc": "ERROR", "message": str(e)}}
 
+def cek_transaksi_digi(ref_id):
+    """Cek status transaksi ke Digiflazz berdasarkan ref_id."""
+    sign = digi_sign(DIGI_USERNAME, DIGI_API_KEY, ref_id)
+    payload = {
+        "username": DIGI_USERNAME,
+        "buyer_sku_code": "",
+        "customer_no": "",
+        "ref_id": ref_id,
+        "sign": sign,
+        "testing": SANDBOX_MODE
+    }
+    try:
+        r = requests.post(f"{DIGI_URL}/transaction", json=payload, timeout=15)
+        return r.json()
+    except Exception as e:
+        return {"data": {"rc": "ERROR", "message": str(e)}}
+
 def buat_ref_id(user_id):
     return f"AS{user_id}{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
@@ -68,15 +85,19 @@ def format_rupiah(angka):
     return f"Rp{int(angka):,}".replace(",", ".")
 
 def validasi_nomor(nomor):
-    """Validasi format nomor HP Indonesia."""
+    """Validasi format nomor HP Indonesia, simpan dalam format 08."""
     nomor = nomor.strip().replace("-", "").replace(" ", "")
-    if nomor.startswith("0"):
-        nomor = "62" + nomor[1:]
+    if nomor.startswith("628"):
+        nomor = "0" + nomor[2:]
+    elif nomor.startswith("+628"):
+        nomor = "0" + nomor[3:]
     elif nomor.startswith("+62"):
-        nomor = nomor[1:]
-    if not nomor.startswith("62"):
+        nomor = "0" + nomor[3:]
+    elif nomor.startswith("62"):
+        nomor = "0" + nomor[2:]
+    if not nomor.startswith("0"):
         return None
-    if len(nomor) < 10 or len(nomor) > 15:
+    if len(nomor) < 10 or len(nomor) > 13:
         return None
     if not nomor.isdigit():
         return None
@@ -86,16 +107,12 @@ def ambil_ref_id(text, prefix):
     """
     Ambil ref_id dari perintah admin.
     Support format: /prefix_REFID atau /prefix REFID
-    Telegram kadang memotong underscore panjang jadi spasi.
     """
     text = text.strip()
-    # Hapus nama bot jika ada (misal /konfirmasi@NamaBot_REFID)
     if "@" in text.split()[0]:
         text = text.split()[0].split("@")[0] + " " + " ".join(text.split()[1:])
-    # Coba format dengan underscore: /prefix_REFID
     if f"/{prefix}_" in text:
         return text.split(f"/{prefix}_", 1)[1].strip().split()[0]
-    # Coba format dengan spasi: /prefix REFID
     parts = text.split(None, 1)
     if len(parts) > 1:
         return parts[1].strip().split()[0]
@@ -337,7 +354,7 @@ def konfirmasi_order(message):
         pass
 
 # ─────────────────────────────────────────────
-# CEK TRANSAKSI
+# CEK TRANSAKSI USER
 # ─────────────────────────────────────────────
 
 @bot.message_handler(func=lambda m: m.text == "💳 Cek Transaksi")
@@ -534,9 +551,60 @@ def order_sukses(message):
         except:
             pass
         bot.send_message(message.chat.id, f"✅ Order {ref_id} berhasil diproses!", reply_markup=menu_admin())
+    elif rc == "03":
+        update_order_status(ref_id, "diproses")
+        bot.send_message(
+            message.chat.id,
+            f"⏳ Transaksi pending di Digiflazz!\n"
+            f"Ref ID: {ref_id}\n\n"
+            f"Pulsa kemungkinan sudah terkirim.\n"
+            f"Cek status dengan: /cekstatus {ref_id}",
+            reply_markup=menu_admin()
+        )
     else:
         update_order_status(ref_id, "gagal")
         bot.send_message(message.chat.id, f"❌ Transaksi gagal!\nRC: {rc}\nPesan: {pesan}", reply_markup=menu_admin())
+
+@bot.message_handler(commands=["cekstatus"])
+def cek_status_digi(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    ref_id = ambil_ref_id(message.text, "cekstatus")
+    if not ref_id:
+        bot.send_message(message.chat.id, "Format: /cekstatus REFID")
+        return
+    order = get_order(ref_id)
+    if not order:
+        bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan di database.")
+        return
+
+    bot.send_message(message.chat.id, f"🔍 Mengecek status ke Digiflazz...")
+    hasil = cek_transaksi_digi(ref_id)
+    data  = hasil.get("data", {})
+    rc    = data.get("rc", "")
+    pesan = data.get("message", "")
+    status_digi = data.get("status", "")
+
+    if rc == "00" or status_digi == "Sukses":
+        update_order_status(ref_id, "sukses")
+        try:
+            bot.send_message(
+                order["user_id"],
+                f"✅ Order Berhasil!\n\n"
+                f"Ref ID : {ref_id}\n"
+                f"Produk : {order['produk']}\n"
+                f"Nomor  : {order['nomor']}\n"
+                f"Status : SUKSES\n\n"
+                f"Terima kasih sudah belanja di Andika Store!"
+            )
+        except:
+            pass
+        bot.send_message(message.chat.id, f"✅ Status diupdate: SUKSES\nPulsa sudah terkirim!", reply_markup=menu_admin())
+    elif rc == "03" or status_digi == "Pending":
+        bot.send_message(message.chat.id, f"⏳ Masih pending di Digiflazz.\nCoba cek lagi beberapa menit.", reply_markup=menu_admin())
+    else:
+        update_order_status(ref_id, "gagal")
+        bot.send_message(message.chat.id, f"❌ Status: GAGAL\nRC: {rc}\nPesan: {pesan}", reply_markup=menu_admin())
 
 @bot.message_handler(commands=["tolak"])
 def order_tolak(message):
@@ -546,7 +614,6 @@ def order_tolak(message):
     if not ref_id:
         bot.send_message(message.chat.id, "Format: /tolak REFID alasan")
         return
-    # Ambil alasan jika ada (setelah ref_id)
     try:
         teks = message.text.strip()
         setelah_refid = teks.split(ref_id, 1)[1].strip()
