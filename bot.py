@@ -89,6 +89,52 @@ def cek_transaksi_digi(ref_id):
     except Exception as e:
         return {"data": {"rc": "ERROR", "message": str(e)}}
 
+def cek_nickname_ml(user_id, zone_id):
+    """
+    Cek nickname ML gratis, tanpa beli produk apapun.
+    Coba beberapa sumber API publik secara berurutan.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36",
+        "Content-Type": "application/json",
+        "Referer": "https://codashop.com/",
+    }
+
+    # Sumber 1: Codashop Indonesia
+    try:
+        url = "https://order.codashop.com/api-id/checkRoleId"
+        payload = {
+            "voucherPricePoint.id": 1,
+            "voucherPricePoint.price": 1,
+            "voucherPricePoint.variablePrice": 0,
+            "user.userId": str(user_id),
+            "user.zoneId": str(zone_id),
+            "voucherTypeName": "MOBILE_LEGENDS",
+            "shopLang": "id_ID",
+        }
+        r = requests.post(url, json=payload, headers=headers, timeout=8)
+        data = r.json()
+        nickname = data.get("result", {}).get("username", "")
+        if nickname:
+            return nickname.strip()
+    except:
+        pass
+
+    # Sumber 2: API Moonton langsung
+    try:
+        url = "https://api.mobilelegends.com/api/account/checkRole"
+        r = requests.post(url, json={"userId": str(user_id), "zoneId": str(zone_id)},
+                          headers=headers, timeout=8)
+        data = r.json()
+        if data.get("code") == 0:
+            nickname = data.get("data", {}).get("nickName", "")
+            if nickname:
+                return nickname.strip()
+    except:
+        pass
+
+    return None
+
 def buat_ref_id(user_id):
     return f"AS{user_id}{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
@@ -253,7 +299,35 @@ def pilih_operator_data(message):
 
 @bot.message_handler(func=lambda m: m.text == "🎮 Top Up Game")
 def menu_game(message):
-    bot.send_message(message.chat.id, "🎮 Top Up Game\n\nSegera hadir! Hubungi admin untuk sementara:\n/admin", reply_markup=menu_utama())
+    uid = message.from_user.id
+    if MAINTENANCE_MODE and uid != ADMIN_ID:
+        bot.send_message(uid, "🔧 Maaf, ADK Store sedang maintenance. Silakan coba beberapa saat lagi.")
+        return
+    user_sessions[uid] = {"tipe": "game"}
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    for game in PRODUCTS["game"].keys():
+        markup.add(types.KeyboardButton(f"🎮 {game}"))
+    markup.add(types.KeyboardButton("🔙 Kembali"))
+    bot.send_message(message.chat.id, "🎮 *Top Up Game*\nPilih game:", parse_mode="Markdown", reply_markup=markup)
+
+@bot.message_handler(func=lambda m: (
+    user_sessions.get(m.from_user.id, {}).get("tipe") == "game" and
+    "step" not in user_sessions.get(m.from_user.id, {}) and
+    m.text != "🔙 Kembali"
+))
+def pilih_game(message):
+    uid = message.from_user.id
+    nama_game = message.text.replace("🎮 ", "").strip()
+    if nama_game not in PRODUCTS["game"]:
+        return
+    user_sessions[uid]["operator"] = nama_game
+    user_sessions[uid]["step"] = "pilih_nominal"
+    bot.send_message(
+        message.chat.id,
+        f"🎮 *{nama_game}*\nPilih nominal top up:",
+        parse_mode="Markdown",
+        reply_markup=menu_nominal(nama_game, "game")
+    )
 
 # ─────────────────────────────────────────────
 # PILIH NOMINAL
@@ -279,9 +353,14 @@ def pilih_nominal(message):
         return
     user_sessions[uid]["produk"] = produk
     user_sessions[uid]["step"] = "input_nomor"
+    tipe = sesi.get("tipe", "pulsa")
+    if tipe == "game":
+        prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan *User ID* game kamu:"
+    else:
+        prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:\n(contoh: 08123456789)"
     bot.send_message(
         message.chat.id,
-        f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:\n(contoh: 08123456789)",
+        prompt,
         parse_mode="Markdown", reply_markup=menu_kembali()
     )
 
@@ -298,22 +377,49 @@ def input_nomor(message):
         return
     sesi   = user_sessions.get(uid, {})
     produk = sesi.get("produk", {})
-    nomor  = validasi_nomor(message.text.strip())
-    if not nomor:
+    tipe   = sesi.get("tipe", "pulsa")
+
+    if tipe == "game":
+        nomor = message.text.strip()
+        if not nomor or len(nomor) < 3:
+            bot.send_message(
+                message.chat.id,
+                "❌ User ID tidak valid!\n\nMasukkan User ID game kamu dengan benar."
+            )
+            return
+    else:
+        nomor = validasi_nomor(message.text.strip())
+        if not nomor:
+            bot.send_message(
+                message.chat.id,
+                "❌ Format nomor tidak valid!\n\nMasukkan nomor HP yang benar:\n"
+                "Contoh: 08123456789 atau 628123456789"
+            )
+            return
+
+    user_sessions[uid]["nomor"] = nomor
+
+    # Game yang butuh Zone ID → minta zone dulu
+    game_butuh_zone = ["Mobile Legends", "Mobile Legends Bang Bang"]
+    operator = sesi.get("operator", "")
+    if tipe == "game" and operator in game_butuh_zone:
+        user_sessions[uid]["step"] = "input_zone"
         bot.send_message(
             message.chat.id,
-            "❌ Format nomor tidak valid!\n\nMasukkan nomor HP yang benar:\n"
-            "Contoh: 08123456789 atau 628123456789"
+            f"✅ User ID: `{nomor}`\n\nSekarang masukkan *Zone ID* kamu:\n(contoh: 1234)",
+            parse_mode="Markdown",
+            reply_markup=menu_kembali()
         )
         return
-    user_sessions[uid]["nomor"] = nomor
+
     user_sessions[uid]["step"]  = "konfirmasi"
+    label = "User ID" if tipe == "game" else "Nomor"
     teks = (
         f"📋 *Konfirmasi Order*\n\n"
         f"Produk : {produk['nama']}\n"
-        f"Nomor  : `{nomor}`\n"
+        f"{label}  : `{nomor}`\n"
         f"Harga  : *{format_rupiah(produk['harga'])}*\n\n"
-        f"Pastikan nomor sudah benar!\n"
+        f"Pastikan {label} sudah benar!\n"
         f"Ketik *YA* untuk lanjut atau *BATAL*"
     )
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -333,25 +439,54 @@ def input_zone(message):
         return
     zone = message.text.strip()
     if not zone.isdigit():
-        bot.send_message(message.chat.id, "Zone ID tidak valid. Masukkan angka saja. Contoh: 1234")
+        bot.send_message(message.chat.id, "❌ Zone ID tidak valid. Masukkan angka saja.\nContoh: 1234")
         return
     sesi   = user_sessions.get(uid, {})
     produk = sesi.get("produk", {})
     nomor  = sesi.get("nomor")
     user_sessions[uid]["zone_id"] = zone
-    user_sessions[uid]["step"] = "konfirmasi"
-    teks = (
-        "Konfirmasi Order\n\n"
-        + "Produk  : " + produk["nama"] + "\n"
-        + "User ID : " + nomor + "\n"
-        + "Zone ID : " + zone + "\n"
-        + "Harga   : " + format_rupiah(produk["harga"]) + "\n\n"
-        + "Pastikan User ID dan Zone ID sudah benar!\n"
-        + "Ketik YA untuk lanjut atau BATAL"
-    )
+
+    # Cek nickname ke Digiflazz
+    loading_msg = bot.send_message(message.chat.id, "🔍 Memverifikasi akun, mohon tunggu...")
+    nickname = cek_nickname_ml(nomor, zone)
+
+    try:
+        bot.delete_message(message.chat.id, loading_msg.message_id)
+    except:
+        pass
+
+    if not nickname:
+        # Gagal ambil nickname — tetap lanjut tapi beri peringatan
+        user_sessions[uid]["nickname"] = None
+        user_sessions[uid]["step"] = "konfirmasi"
+        teks = (
+            f"⚠️ *Tidak dapat memverifikasi akun.*\n"
+            f"Pastikan User ID & Zone ID benar sebelum lanjut.\n\n"
+            f"📋 *Konfirmasi Order*\n\n"
+            f"Produk  : {produk['nama']}\n"
+            f"User ID : `{nomor}`\n"
+            f"Zone ID : `{zone}`\n"
+            f"Harga   : *{format_rupiah(produk['harga'])}*\n\n"
+            f"Ketik *YA* untuk lanjut atau *BATAL*"
+        )
+    else:
+        user_sessions[uid]["nickname"] = nickname
+        user_sessions[uid]["step"] = "konfirmasi"
+        teks = (
+            f"✅ *Akun Ditemukan!*\n\n"
+            f"📋 *Konfirmasi Order*\n\n"
+            f"Produk   : {produk['nama']}\n"
+            f"Nickname : *{nickname}*\n"
+            f"User ID  : `{nomor}`\n"
+            f"Zone ID  : `{zone}`\n"
+            f"Harga    : *{format_rupiah(produk['harga'])}*\n\n"
+            f"Pastikan nickname di atas sesuai akun kamu!\n"
+            f"Ketik *YA* untuk lanjut atau *BATAL*"
+        )
+
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(types.KeyboardButton("YA"), types.KeyboardButton("BATAL"))
-    bot.send_message(message.chat.id, teks, reply_markup=markup)
+    bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text in ["YA", "BATAL"] and user_sessions.get(m.from_user.id, {}).get("step") == "konfirmasi")
 def konfirmasi_order(message):
@@ -361,34 +496,45 @@ def konfirmasi_order(message):
         user_sessions[uid] = {}
         bot.send_message(message.chat.id, "Order dibatalkan.", reply_markup=menu_utama())
         return
-    produk = sesi.get("produk", {})
-    nomor  = sesi.get("nomor")
-    ref_id = buat_ref_id(uid)
+    produk   = sesi.get("produk", {})
+    nomor    = sesi.get("nomor")
+    zone_id  = sesi.get("zone_id")
+    nickname = sesi.get("nickname")
+    tipe     = sesi.get("tipe", "pulsa")
+    ref_id   = buat_ref_id(uid)
     user_sessions[uid]["ref_id"] = ref_id
     user_sessions[uid]["step"]   = "menunggu_bayar"
-    zona_info = ""
-    if sesi.get("tipe") == "game" and zone_id:
-        zona_info = f"Zone ID : {zone_id}\n"
+
+    # Gabungkan nomor+zone untuk disimpan jika game ML
+    nomor_simpan = f"{nomor}|{zone_id}" if zone_id else nomor
 
     save_order(
         ref_id=ref_id, user_id=uid,
         nama=message.from_user.first_name,
-        tipe=sesi.get("tipe"), operator=sesi.get("operator", "-"),
+        tipe=tipe, operator=sesi.get("operator", "-"),
         produk=produk.get("nama"), kode=produk.get("kode"),
-        nomor=nomor, harga=produk.get("harga")
+        nomor=nomor_simpan, harga=produk.get("harga")
     )
 
-    is_game = sesi.get("tipe") == "game"
-    label_nomor = "User ID" if is_game else "Nomor"
-    zone_line = f"Zone ID : {zone_id}\n" if is_game and zone_id else ""
+    # Baris detail order sesuai tipe
+    if zone_id:
+        nick_line    = f"Nickname : *{nickname}*\n" if nickname else ""
+        detail_user  = f"{nick_line}User ID  : `{nomor}`\nZone ID  : `{zone_id}`"
+        nick_notif   = f" ({nickname})" if nickname else ""
+        detail_notif = f"🎮 User ID: {nomor} | Zone: {zone_id}{nick_notif}"
+    elif tipe == "game":
+        detail_user  = f"User ID : `{nomor}`"
+        detail_notif = f"🎮 User ID: {nomor}"
+    else:
+        detail_user  = f"Nomor   : `{nomor}`"
+        detail_notif = f"📞 {nomor}"
 
     teks_bayar = (
         f"💳 *Informasi Pembayaran*\n\n"
-        f"Produk    : {produk['nama']}\n"
-        f"{label_nomor} : `{nomor}`\n"
-        + zone_line +
-        f"Total     : *{format_rupiah(produk['harga'])}*\n"
-        f"Ref ID    : `{ref_id}`\n\n"
+        f"Produk : {produk['nama']}\n"
+        f"{detail_user}\n"
+        f"Total  : *{format_rupiah(produk['harga'])}*\n"
+        f"Ref ID : `{ref_id}`\n\n"
         f"Bayar via:\n"
         f"🏦 {BANK_REKENING} — {NO_REKENING}\n"
         f"a.n. {NAMA_REKENING}\n\n"
@@ -397,7 +543,6 @@ def konfirmasi_order(message):
         f"Telegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}"
     )
     bot.send_message(message.chat.id, teks_bayar, parse_mode="Markdown")
-    # Kirim gambar QRIS
     qris_path = os.path.join(os.path.dirname(__file__), "qris.jpg")
     try:
         with open(qris_path, "rb") as qris_file:
@@ -407,14 +552,14 @@ def konfirmasi_order(message):
                 caption="Scan QRIS ini untuk bayar — berlaku untuk semua aplikasi dompet digital.",
                 reply_markup=menu_kembali()
             )
-    except Exception as e:
-        bot.send_message(message.chat.id, "QRIS tidak tersedia. Hubungi admin.", reply_markup=menu_kembali())
+    except:
+        bot.send_message(message.chat.id, "QRIS tidak tersedia saat ini. Hubungi admin.", reply_markup=menu_kembali())
 
     notif = (
         f"🔔 *ORDER BARU!*\n\n"
         f"👤 {message.from_user.first_name} (@{message.from_user.username or '-'})\n"
         f"📦 {produk['nama']}\n"
-        f"📞 {nomor}\n"
+        f"{detail_notif}\n"
         f"💰 {format_rupiah(produk['harga'])}\n"
         f"Ref ID: `{ref_id}`\n\n"
         f"Konfirmasi: /konfirmasi {ref_id}\n"
@@ -887,6 +1032,33 @@ def get_ip_railway():
             return r.text.strip()
         except:
             return "Gagal ambil IP"
+
+@bot.message_handler(commands=["maintenance"])
+def toggle_maintenance(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    global MAINTENANCE_MODE
+    args = message.text.strip().split()
+    if len(args) > 1:
+        arg = args[1].lower()
+        if arg == "on":
+            MAINTENANCE_MODE = True
+        elif arg == "off":
+            MAINTENANCE_MODE = False
+        else:
+            bot.send_message(message.chat.id, "Format: /maintenance on  atau  /maintenance off")
+            return
+    else:
+        MAINTENANCE_MODE = not MAINTENANCE_MODE  # toggle
+
+    status = "\U0001f527 AKTIF" if MAINTENANCE_MODE else "\u2705 NONAKTIF"
+    bot.send_message(
+        message.chat.id,
+        f"Mode Maintenance sekarang: *{status}*\n\n"
+        f"{'User tidak bisa bertransaksi saat ini.' if MAINTENANCE_MODE else 'Bot kembali normal, user bisa bertransaksi.'}",
+        parse_mode="Markdown",
+        reply_markup=menu_admin()
+    )
 
 @bot.message_handler(commands=["cekip"])
 def cek_ip(message):
