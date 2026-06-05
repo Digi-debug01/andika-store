@@ -22,8 +22,16 @@ NAMA_REKENING = os.getenv("NAMA_REKENING", "Andika")
 NO_REKENING   = os.getenv("NO_REKENING", "")
 BANK_REKENING = os.getenv("BANK_REKENING", "BCA")
 
-DIGI_URL = "https://api.digiflazz.com/v1"
+DIGI_URL   = "https://api.digiflazz.com/v1"
+FIXIE_URL  = os.getenv("FIXIE_URL", "")  # Format: http://user:pass@fixie.usefixie.com:80
+
 bot = telebot.TeleBot(BOT_TOKEN)
+
+def get_proxies():
+    """Kembalikan dict proxies jika FIXIE_URL tersedia, atau None jika tidak."""
+    if FIXIE_URL:
+        return {"http": FIXIE_URL, "https": FIXIE_URL}
+    return None
 
 user_sessions      = {}
 broadcast_sessions = {}
@@ -40,7 +48,7 @@ def cek_saldo():
     sign = digi_sign(DIGI_USERNAME, DIGI_API_KEY, "depo")
     payload = {"cmd": "deposit", "username": DIGI_USERNAME, "sign": sign}
     try:
-        r = requests.post(f"{DIGI_URL}/cek-saldo", json=payload, timeout=10)
+        r = requests.post(f"{DIGI_URL}/cek-saldo", json=payload, timeout=10, proxies=get_proxies())
         return r.json().get("data", {}).get("deposit", 0)
     except:
         return None
@@ -56,7 +64,7 @@ def transaksi(ref_id, customer_no, buyer_sku_code):
         "testing":        SANDBOX_MODE
     }
     try:
-        r = requests.post(f"{DIGI_URL}/transaction", json=payload, timeout=15)
+        r = requests.post(f"{DIGI_URL}/transaction", json=payload, timeout=15, proxies=get_proxies())
         return r.json()
     except Exception as e:
         return {"data": {"rc": "ERROR", "message": str(e)}}
@@ -73,7 +81,7 @@ def cek_transaksi_digi(ref_id):
         "testing": SANDBOX_MODE
     }
     try:
-        r = requests.post(f"{DIGI_URL}/transaction", json=payload, timeout=15)
+        r = requests.post(f"{DIGI_URL}/transaction", json=payload, timeout=15, proxies=get_proxies())
         return r.json()
     except Exception as e:
         return {"data": {"rc": "ERROR", "message": str(e)}}
@@ -431,6 +439,12 @@ def panel_admin(message):
         f"Mode        : {mode_text}\n"
         f"Total Order : {stats['total']}\n"
         f"Total User  : {count_users()}\n\n"
+        f"Perintah tersedia:\n"
+        f"/konfirmasi REFID — konfirmasi bayar\n"
+        f"/sukses REFID     — proses transaksi\n"
+        f"/cekstatus REFID  — cek status ke Digi\n"
+        f"/tolak REFID alasan\n"
+        f"/refund REFID     — tandai refund selesai\n\n"
         f"Pilih menu:"
     )
     bot.send_message(message.chat.id, teks, reply_markup=menu_admin())
@@ -531,6 +545,17 @@ def order_sukses(message):
         bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan.")
         return
 
+
+    # Cegah double transaksi jika sudah sukses
+    if order.get("status") == "sukses":
+        bot.send_message(
+            message.chat.id,
+            f"⚠️ Order {ref_id} sudah berstatus SUKSES sebelumnya.\n"
+            f"Tidak bisa diproses ulang untuk menghindari double transaksi.",
+            reply_markup=menu_admin()
+        )
+        return
+
     hasil = transaksi(ref_id, order["nomor"], order["kode"])
     data  = hasil.get("data", {})
     rc    = data.get("rc", "")
@@ -538,32 +563,77 @@ def order_sukses(message):
 
     if rc == "00":
         update_order_status(ref_id, "sukses")
+        # Notif ke pembeli
         try:
             bot.send_message(
                 order["user_id"],
-                f"✅ Order Berhasil!\n\n"
-                f"Ref ID : {ref_id}\n"
+                f"✅ *Order Berhasil!*\n\n"
+                f"Ref ID : `{ref_id}`\n"
                 f"Produk : {order['produk']}\n"
                 f"Nomor  : {order['nomor']}\n"
-                f"Status : SUKSES\n\n"
-                f"Terima kasih sudah belanja di Andika Store!"
+                f"Status : SUKSES ✅\n\n"
+                f"Terima kasih sudah belanja di Andika Store! 🙏",
+                parse_mode="Markdown"
             )
         except:
             pass
         bot.send_message(message.chat.id, f"✅ Order {ref_id} berhasil diproses!", reply_markup=menu_admin())
+
     elif rc == "03":
         update_order_status(ref_id, "diproses")
+        # Notif ke pembeli bahwa sedang diproses / pending
+        try:
+            bot.send_message(
+                order["user_id"],
+                f"⏳ *Order Sedang Diproses*\n\n"
+                f"Ref ID : `{ref_id}`\n"
+                f"Produk : {order['produk']}\n"
+                f"Nomor  : {order['nomor']}\n\n"
+                f"Transaksi sedang diproses oleh provider.\n"
+                f"Kamu akan mendapat notifikasi segera setelah selesai.\n\n"
+                f"Ada pertanyaan? Hubungi @{ADMIN_USERNAME}",
+                parse_mode="Markdown"
+            )
+        except:
+            pass
         bot.send_message(
             message.chat.id,
             f"⏳ Transaksi pending di Digiflazz!\n"
             f"Ref ID: {ref_id}\n\n"
-            f"Pulsa kemungkinan sudah terkirim.\n"
+            f"Pembeli sudah dinotifikasi.\n"
             f"Cek status dengan: /cekstatus {ref_id}",
             reply_markup=menu_admin()
         )
+
     else:
         update_order_status(ref_id, "gagal")
-        bot.send_message(message.chat.id, f"❌ Transaksi gagal!\nRC: {rc}\nPesan: {pesan}", reply_markup=menu_admin())
+        # Notif ke pembeli bahwa order gagal + info refund
+        try:
+            bot.send_message(
+                order["user_id"],
+                f"❌ *Order Gagal*\n\n"
+                f"Ref ID : `{ref_id}`\n"
+                f"Produk : {order['produk']}\n"
+                f"Nomor  : {order['nomor']}\n"
+                f"Harga  : {format_rupiah(order['harga'])}\n\n"
+                f"Maaf, transaksi kamu tidak berhasil diproses.\n"
+                f"Admin sedang menangani, mohon tunggu info selanjutnya.\n\n"
+                f"Hubungi admin: @{ADMIN_USERNAME}",
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+        # Admin bisa pilih: coba ulang atau refund
+        bot.send_message(
+            message.chat.id,
+            f"❌ Transaksi gagal!\n"
+            f"RC: {rc} | Pesan: {pesan}\n\n"
+            f"Pilihan admin:\n"
+            f"🔄 Coba ulang : /sukses {ref_id}\n"
+            f"💸 Refund     : /refund {ref_id}\n"
+            f"❌ Tolak      : /tolak {ref_id} alasan",
+            reply_markup=menu_admin()
+        )
 
 @bot.message_handler(commands=["cekstatus"])
 def cek_status_digi(message):
@@ -590,21 +660,71 @@ def cek_status_digi(message):
         try:
             bot.send_message(
                 order["user_id"],
-                f"✅ Order Berhasil!\n\n"
-                f"Ref ID : {ref_id}\n"
+                f"✅ *Order Berhasil!*\n\n"
+                f"Ref ID : `{ref_id}`\n"
                 f"Produk : {order['produk']}\n"
                 f"Nomor  : {order['nomor']}\n"
-                f"Status : SUKSES\n\n"
-                f"Terima kasih sudah belanja di Andika Store!"
+                f"Status : SUKSES ✅\n\n"
+                f"Terima kasih sudah belanja di Andika Store! 🙏",
+                parse_mode="Markdown"
             )
         except:
             pass
-        bot.send_message(message.chat.id, f"✅ Status diupdate: SUKSES\nPulsa sudah terkirim!", reply_markup=menu_admin())
+        bot.send_message(message.chat.id, f"✅ Status diupdate: SUKSES\nPembeli sudah dinotifikasi!", reply_markup=menu_admin())
+
     elif rc == "03" or status_digi == "Pending":
-        bot.send_message(message.chat.id, f"⏳ Masih pending di Digiflazz.\nCoba cek lagi beberapa menit.", reply_markup=menu_admin())
+        # Pembeli diinfokan masih pending
+        try:
+            bot.send_message(
+                order["user_id"],
+                f"⏳ *Update Order*\n\n"
+                f"Ref ID : `{ref_id}`\n"
+                f"Produk : {order['produk']}\n\n"
+                f"Transaksi masih dalam antrian provider.\n"
+                f"Mohon tunggu, kamu akan dinotifikasi jika sudah selesai.\n\n"
+                f"Pertanyaan? Hubungi @{ADMIN_USERNAME}",
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+        bot.send_message(
+            message.chat.id,
+            f"⏳ Masih pending di Digiflazz.\n"
+            f"Pembeli sudah dinotifikasi.\n"
+            f"Coba cek lagi beberapa menit.",
+            reply_markup=menu_admin()
+        )
+
     else:
         update_order_status(ref_id, "gagal")
-        bot.send_message(message.chat.id, f"❌ Status: GAGAL\nRC: {rc}\nPesan: {pesan}", reply_markup=menu_admin())
+        # Notif ke pembeli bahwa order gagal + info refund
+        try:
+            bot.send_message(
+                order["user_id"],
+                f"❌ *Order Gagal*\n\n"
+                f"Ref ID : `{ref_id}`\n"
+                f"Produk : {order['produk']}\n"
+                f"Nomor  : {order['nomor']}\n"
+                f"Harga  : {format_rupiah(order['harga'])}\n\n"
+                f"Maaf, transaksi kamu tidak berhasil diproses.\n"
+                f"Dana kamu akan dikembalikan (refund) oleh admin.\n\n"
+                f"Hubungi admin untuk konfirmasi refund:\n"
+                f"@{ADMIN_USERNAME}",
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+        # Ingatkan admin soal refund
+        bot.send_message(
+            message.chat.id,
+            f"❌ Status: GAGAL\nRC: {rc} | Pesan: {pesan}\n\n"
+            f"⚠️ PERLU REFUND:\n"
+            f"Pembeli: {order['nama']}\n"
+            f"Ref ID: {ref_id}\n"
+            f"Nominal: {format_rupiah(order['harga'])}\n\n"
+            f"Pembeli sudah dinotifikasi untuk menghubungi admin.",
+            reply_markup=menu_admin()
+        )
 
 @bot.message_handler(commands=["tolak"])
 def order_tolak(message):
@@ -629,20 +749,71 @@ def order_tolak(message):
     try:
         bot.send_message(
             order["user_id"],
-            f"❌ Order Ditolak\n\n"
-            f"Ref ID : {ref_id}\n"
+            f"❌ *Order Ditolak*\n\n"
+            f"Ref ID : `{ref_id}`\n"
+            f"Produk : {order['produk']}\n"
+            f"Harga  : {format_rupiah(order['harga'])}\n"
             f"Alasan : {alasan}\n\n"
-            f"Hubungi admin: @{ADMIN_USERNAME}"
+            f"Dana kamu akan dikembalikan oleh admin.\n"
+            f"Hubungi admin: @{ADMIN_USERNAME}",
+            parse_mode="Markdown"
         )
     except:
         pass
-    bot.send_message(message.chat.id, f"Order {ref_id} ditolak!", reply_markup=menu_admin())
+    bot.send_message(
+        message.chat.id,
+        f"✅ Order {ref_id} ditolak.\n\n"
+        f"⚠️ *PERLU REFUND:*\n"
+        f"Pembeli : {order['nama']}\n"
+        f"Nominal : {format_rupiah(order['harga'])}\n"
+        f"Ref ID  : `{ref_id}`\n\n"
+        f"Tandai sudah direfund: /refund {ref_id}",
+        parse_mode="Markdown",
+        reply_markup=menu_admin()
+    )
+
+@bot.message_handler(commands=["refund"])
+def order_refund(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    ref_id = ambil_ref_id(message.text, "refund")
+    if not ref_id:
+        bot.send_message(message.chat.id, "Format: /refund REFID")
+        return
+    order = get_order(ref_id)
+    if not order:
+        bot.send_message(message.chat.id, f"Order {ref_id} tidak ditemukan.")
+        return
+    # Notif ke pembeli bahwa refund sudah dikirim
+    try:
+        bot.send_message(
+            order["user_id"],
+            f"💸 *Refund Berhasil*\n\n"
+            f"Ref ID : `{ref_id}`\n"
+            f"Produk : {order['produk']}\n"
+            f"Nominal: {format_rupiah(order['harga'])}\n\n"
+            f"Dana sudah dikembalikan oleh admin.\n"
+            f"Terima kasih atas pengertiannya 🙏\n\n"
+            f"Butuh bantuan? Hubungi @{ADMIN_USERNAME}",
+            parse_mode="Markdown"
+        )
+    except:
+        pass
+    bot.send_message(
+        message.chat.id,
+        f"✅ Refund {ref_id} sudah ditandai!\n"
+        f"Pembeli ({order['nama']}) sudah dinotifikasi.",
+        reply_markup=menu_admin()
+    )
 
 # ─────────────────────────────────────────────
 # JALANKAN BOT
 # ─────────────────────────────────────────────
 init_db()
 print("Andika Store Bot berjalan...")
-print(f"Mode: {'SANDBOX' if SANDBOX_MODE else 'PRODUCTION'}")
-print(f"Produk: {sum(len(v) for v in PRODUCTS['pulsa'].values())} pulsa, {sum(len(v) for v in PRODUCTS['data'].values())} data")
+print(f"Mode        : {'SANDBOX' if SANDBOX_MODE else 'PRODUCTION'}")
+print(f"Digi User   : {DIGI_USERNAME}")
+print(f"Digi Key    : {DIGI_API_KEY[:6]}... (sensor)")
+print(f"Proxy       : {FIXIE_URL[:20] + '...' if FIXIE_URL else 'Tidak ada (direct)'}")
+print(f"Produk      : {sum(len(v) for v in PRODUCTS['pulsa'].values())} pulsa, {sum(len(v) for v in PRODUCTS['data'].values())} data")
 bot.infinity_polling()
