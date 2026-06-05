@@ -254,12 +254,35 @@ def pilih_operator_data(message):
 @bot.message_handler(func=lambda m: m.text == "🎮 Top Up Game")
 def menu_game(message):
     uid = message.from_user.id
+    if MAINTENANCE_MODE and uid != ADMIN_ID:
+        bot.send_message(uid, "🔧 Maaf, ADK Store sedang maintenance. Silakan coba beberapa saat lagi.")
+        return
     user_sessions[uid] = {"tipe": "game"}
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     for game in PRODUCTS["game"].keys():
         markup.add(types.KeyboardButton(f"🎮 {game}"))
     markup.add(types.KeyboardButton("🔙 Kembali"))
-    bot.send_message(message.chat.id, "Pilih game:", reply_markup=markup)
+    bot.send_message(message.chat.id, "🎮 *Top Up Game*\nPilih game:", parse_mode="Markdown", reply_markup=markup)
+
+@bot.message_handler(func=lambda m: (
+    user_sessions.get(m.from_user.id, {}).get("tipe") == "game" and
+    "step" not in user_sessions.get(m.from_user.id, {}) and
+    m.text != "🔙 Kembali"
+))
+def pilih_game(message):
+    uid = message.from_user.id
+    nama_game = message.text.replace("🎮 ", "").strip()
+    if nama_game not in PRODUCTS["game"]:
+        return
+    user_sessions[uid]["operator"] = nama_game
+    user_sessions[uid]["step"] = "pilih_nominal"
+    bot.send_message(
+        message.chat.id,
+        f"🎮 *{nama_game}*\nPilih nominal top up:",
+        parse_mode="Markdown",
+        reply_markup=menu_nominal(nama_game, "game")
+    )
+
 # ─────────────────────────────────────────────
 # PILIH NOMINAL
 # ─────────────────────────────────────────────
@@ -284,9 +307,14 @@ def pilih_nominal(message):
         return
     user_sessions[uid]["produk"] = produk
     user_sessions[uid]["step"] = "input_nomor"
+    tipe = sesi.get("tipe", "pulsa")
+    if tipe == "game":
+        prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan *User ID* game kamu:"
+    else:
+        prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:\n(contoh: 08123456789)"
     bot.send_message(
         message.chat.id,
-        f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:\n(contoh: 08123456789)",
+        prompt,
         parse_mode="Markdown", reply_markup=menu_kembali()
     )
 
@@ -303,22 +331,49 @@ def input_nomor(message):
         return
     sesi   = user_sessions.get(uid, {})
     produk = sesi.get("produk", {})
-    nomor  = validasi_nomor(message.text.strip())
-    if not nomor:
+    tipe   = sesi.get("tipe", "pulsa")
+
+    if tipe == "game":
+        nomor = message.text.strip()
+        if not nomor or len(nomor) < 3:
+            bot.send_message(
+                message.chat.id,
+                "❌ User ID tidak valid!\n\nMasukkan User ID game kamu dengan benar."
+            )
+            return
+    else:
+        nomor = validasi_nomor(message.text.strip())
+        if not nomor:
+            bot.send_message(
+                message.chat.id,
+                "❌ Format nomor tidak valid!\n\nMasukkan nomor HP yang benar:\n"
+                "Contoh: 08123456789 atau 628123456789"
+            )
+            return
+
+    user_sessions[uid]["nomor"] = nomor
+
+    # Game yang butuh Zone ID → minta zone dulu
+    game_butuh_zone = ["Mobile Legends", "Mobile Legends Bang Bang"]
+    operator = sesi.get("operator", "")
+    if tipe == "game" and operator in game_butuh_zone:
+        user_sessions[uid]["step"] = "input_zone"
         bot.send_message(
             message.chat.id,
-            "❌ Format nomor tidak valid!\n\nMasukkan nomor HP yang benar:\n"
-            "Contoh: 08123456789 atau 628123456789"
+            f"✅ User ID: `{nomor}`\n\nSekarang masukkan *Zone ID* kamu:\n(contoh: 1234)",
+            parse_mode="Markdown",
+            reply_markup=menu_kembali()
         )
         return
-    user_sessions[uid]["nomor"] = nomor
+
     user_sessions[uid]["step"]  = "konfirmasi"
+    label = "User ID" if tipe == "game" else "Nomor"
     teks = (
         f"📋 *Konfirmasi Order*\n\n"
         f"Produk : {produk['nama']}\n"
-        f"Nomor  : `{nomor}`\n"
+        f"{label}  : `{nomor}`\n"
         f"Harga  : *{format_rupiah(produk['harga'])}*\n\n"
-        f"Pastikan nomor sudah benar!\n"
+        f"Pastikan {label} sudah benar!\n"
         f"Ketik *YA* untuk lanjut atau *BATAL*"
     )
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -346,17 +401,17 @@ def input_zone(message):
     user_sessions[uid]["zone_id"] = zone
     user_sessions[uid]["step"] = "konfirmasi"
     teks = (
-        "Konfirmasi Order\n\n"
-        + "Produk  : " + produk["nama"] + "\n"
-        + "User ID : " + nomor + "\n"
-        + "Zone ID : " + zone + "\n"
-        + "Harga   : " + format_rupiah(produk["harga"]) + "\n\n"
-        + "Pastikan User ID dan Zone ID sudah benar!\n"
-        + "Ketik YA untuk lanjut atau BATAL"
+        f"📋 *Konfirmasi Order*\n\n"
+        f"Produk  : {produk['nama']}\n"
+        f"User ID : `{nomor}`\n"
+        f"Zone ID : `{zone}`\n"
+        f"Harga   : *{format_rupiah(produk['harga'])}*\n\n"
+        f"Pastikan User ID & Zone ID sudah benar!\n"
+        f"Ketik *YA* untuk lanjut atau *BATAL*"
     )
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(types.KeyboardButton("YA"), types.KeyboardButton("BATAL"))
-    bot.send_message(message.chat.id, teks, reply_markup=markup)
+    bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text in ["YA", "BATAL"] and user_sessions.get(m.from_user.id, {}).get("step") == "konfirmasi")
 def konfirmasi_order(message):
@@ -366,24 +421,40 @@ def konfirmasi_order(message):
         user_sessions[uid] = {}
         bot.send_message(message.chat.id, "Order dibatalkan.", reply_markup=menu_utama())
         return
-    produk = sesi.get("produk", {})
-    nomor  = sesi.get("nomor")
-    ref_id = buat_ref_id(uid)
+    produk   = sesi.get("produk", {})
+    nomor    = sesi.get("nomor")
+    zone_id  = sesi.get("zone_id")  # None jika bukan game zone
+    tipe     = sesi.get("tipe", "pulsa")
+    ref_id   = buat_ref_id(uid)
     user_sessions[uid]["ref_id"] = ref_id
     user_sessions[uid]["step"]   = "menunggu_bayar"
+
+    # Gabungkan nomor+zone untuk disimpan jika game ML
+    nomor_simpan = f"{nomor}|{zone_id}" if zone_id else nomor
 
     save_order(
         ref_id=ref_id, user_id=uid,
         nama=message.from_user.first_name,
-        tipe=sesi.get("tipe"), operator=sesi.get("operator", "-"),
+        tipe=tipe, operator=sesi.get("operator", "-"),
         produk=produk.get("nama"), kode=produk.get("kode"),
-        nomor=nomor, harga=produk.get("harga")
+        nomor=nomor_simpan, harga=produk.get("harga")
     )
+
+    # Baris detail order sesuai tipe
+    if zone_id:
+        detail_user = f"User ID : `{nomor}`\nZone ID : `{zone_id}`"
+        detail_notif = f"🎮 User ID: {nomor} | Zone: {zone_id}"
+    elif tipe == "game":
+        detail_user  = f"User ID : `{nomor}`"
+        detail_notif = f"🎮 User ID: {nomor}"
+    else:
+        detail_user  = f"Nomor   : `{nomor}`"
+        detail_notif = f"📞 {nomor}"
 
     teks_bayar = (
         f"💳 *Informasi Pembayaran*\n\n"
         f"Produk : {produk['nama']}\n"
-        f"Nomor  : `{nomor}`\n"
+        f"{detail_user}\n"
         f"Total  : *{format_rupiah(produk['harga'])}*\n"
         f"Ref ID : `{ref_id}`\n\n"
         f"Transfer ke:\n"
@@ -398,7 +469,7 @@ def konfirmasi_order(message):
         f"🔔 *ORDER BARU!*\n\n"
         f"👤 {message.from_user.first_name} (@{message.from_user.username or '-'})\n"
         f"📦 {produk['nama']}\n"
-        f"📞 {nomor}\n"
+        f"{detail_notif}\n"
         f"💰 {format_rupiah(produk['harga'])}\n"
         f"Ref ID: `{ref_id}`\n\n"
         f"Konfirmasi: /konfirmasi {ref_id}\n"
