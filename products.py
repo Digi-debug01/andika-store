@@ -132,7 +132,32 @@ PRODUCTS = {
         ],
     },
 
-    "game": {},   # Diisi nanti
+    "game": {
+        "Mobile Legends": [
+            # Diamond Umum
+            {"kode": "ML5",    "nama": "ML 5 Diamond",             "harga": 2000},
+            {"kode": "ML10",   "nama": "ML 10 Diamond",            "harga": 3500},
+            {"kode": "ML12",   "nama": "ML 12 Diamond",            "harga": 4000},
+            {"kode": "ML15",   "nama": "ML 15 Diamond",            "harga": 5000},
+            {"kode": "ML20",   "nama": "ML 20 Diamond",            "harga": 6500},
+            {"kode": "ML50",   "nama": "ML 50 Diamond",            "harga": 14500},
+            {"kode": "ML100",  "nama": "ML 100 Diamond",           "harga": 27500},
+            {"kode": "ML200",  "nama": "ML 200 Diamond",           "harga": 53000},
+            {"kode": "ML250",  "nama": "ML 250 Diamond",           "harga": 66000},
+            {"kode": "ML500",  "nama": "ML 500 Diamond",           "harga": 129000},
+            {"kode": "ML750",  "nama": "ML 750 Diamond",           "harga": 190000},
+            {"kode": "ML1000", "nama": "ML 1000 Diamond",          "harga": 247000},
+            {"kode": "ML1500", "nama": "ML 1500 Diamond",          "harga": 374000},
+            {"kode": "ML2010", "nama": "ML 2010 Diamond",          "harga": 471000},
+            # Membership
+            {"kode": "WDP1",   "nama": "ML Weekly Diamond Pass",   "harga": 29500},
+            {"kode": "WDP2",   "nama": "ML Weekly Diamond Pass 2x","harga": 57000},
+            {"kode": "WDP3",   "nama": "ML Weekly Diamond Pass 3x","harga": 84500},
+            {"kode": "STAR",   "nama": "ML Starlight Member",      "harga": 79000},
+            {"kode": "MLTP",   "nama": "ML Twilight Pass",         "harga": 147000},
+            {"kode": "STARP",  "nama": "ML Starlight Member Plus", "harga": 306000},
+        ],
+    }
 }
 
 # ─────────────────────────────────────────────
@@ -193,4 +218,12 @@ HARGA_OFFLINE = {
     # Data XL Mini
     "DXLM1G7H": 11360, "DXLM1.5G7H": 12210, "DXLM2.5G7H": 17010,
     "DXLM4G7H": 20910, "DXLM6G7H": 26775,
+    # Mobile Legends Diamond
+    "ML5": 2500, "ML10": 4000, "ML12": 4500, "ML15": 5500,
+    "ML20": 7000, "ML50": 15500, "ML100": 29000, "ML200": 55000,
+    "ML250": 68000, "ML500": 131000, "ML750": 192000, "ML1000": 249000,
+    "ML1500": 376000, "ML2010": 473000,
+    # ML Membership
+    "WDP1": 31500, "WDP2": 59000, "WDP3": 86500,
+    "STAR": 81000, "MLTP": 149000, "STARP": 308000,
 }
