@@ -1,5 +1,4 @@
 import telebot
-import threading
 import requests
 import hashlib
 import os
@@ -16,6 +15,7 @@ load_dotenv()
 BOT_TOKEN     = os.getenv("BOT_TOKEN")
 ADMIN_ID      = int(os.getenv("ADMIN_ID"))
 ADMIN_USERNAME= os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_WA = "wa.me/6285136080650"
 DIGI_USERNAME = os.getenv("DIGI_USERNAME", "")
 DIGI_API_KEY  = os.getenv("DIGI_API_KEY", "")
 SANDBOX_MODE  = os.getenv("SANDBOX_MODE", "True") == "True"
@@ -342,7 +342,7 @@ def konfirmasi_order(message):
         f"{BANK_REKENING} — {NO_REKENING}\n"
         f"a.n. {NAMA_REKENING}\n\n"
         f"Kirim bukti bayar ke admin setelah transfer:\n"
-        f"@{ADMIN_USERNAME}"
+        f"Telegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}"
     )
     bot.send_message(message.chat.id, teks_bayar, parse_mode="Markdown", reply_markup=menu_kembali())
 
@@ -417,7 +417,7 @@ def info(message):
 
 @bot.message_handler(commands=["admin"])
 def hubungi_admin(message):
-    bot.send_message(message.chat.id, f"Silakan hubungi admin:\n@{ADMIN_USERNAME}", reply_markup=menu_utama())
+    bot.send_message(message.chat.id, f"Silakan hubungi admin:\nTelegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}", reply_markup=menu_utama())
 
 @bot.message_handler(func=lambda m: m.text == "🔙 Kembali")
 def kembali(message):
@@ -592,7 +592,7 @@ def order_sukses(message):
                 f"Nomor  : {order['nomor']}\n\n"
                 f"Transaksi sedang diproses oleh provider.\n"
                 f"Kamu akan mendapat notifikasi segera setelah selesai.\n\n"
-                f"Ada pertanyaan? Hubungi @{ADMIN_USERNAME}",
+                f"Ada pertanyaan?\nTelegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}",
                 parse_mode="Markdown"
             )
         except:
@@ -619,7 +619,7 @@ def order_sukses(message):
                 f"Harga  : {format_rupiah(order['harga'])}\n\n"
                 f"Maaf, transaksi kamu tidak berhasil diproses.\n"
                 f"Admin sedang menangani, mohon tunggu info selanjutnya.\n\n"
-                f"Hubungi admin: @{ADMIN_USERNAME}",
+                f"Hubungi admin:\nTelegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}",
                 parse_mode="Markdown"
             )
         except:
@@ -683,7 +683,7 @@ def cek_status_digi(message):
                 f"Produk : {order['produk']}\n\n"
                 f"Transaksi masih dalam antrian provider.\n"
                 f"Mohon tunggu, kamu akan dinotifikasi jika sudah selesai.\n\n"
-                f"Pertanyaan? Hubungi @{ADMIN_USERNAME}",
+                f"Pertanyaan?\nTelegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}",
                 parse_mode="Markdown"
             )
         except:
@@ -710,7 +710,7 @@ def cek_status_digi(message):
                 f"Maaf, transaksi kamu tidak berhasil diproses.\n"
                 f"Dana kamu akan dikembalikan (refund) oleh admin.\n\n"
                 f"Hubungi admin untuk konfirmasi refund:\n"
-                f"@{ADMIN_USERNAME}",
+                f"Telegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}",
                 parse_mode="Markdown"
             )
         except:
@@ -756,7 +756,7 @@ def order_tolak(message):
             f"Harga  : {format_rupiah(order['harga'])}\n"
             f"Alasan : {alasan}\n\n"
             f"Dana kamu akan dikembalikan oleh admin.\n"
-            f"Hubungi admin: @{ADMIN_USERNAME}",
+            f"Hubungi admin:\nTelegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}",
             parse_mode="Markdown"
         )
     except:
@@ -795,7 +795,7 @@ def order_refund(message):
             f"Nominal: {format_rupiah(order['harga'])}\n\n"
             f"Dana sudah dikembalikan oleh admin.\n"
             f"Terima kasih atas pengertiannya 🙏\n\n"
-            f"Butuh bantuan? Hubungi @{ADMIN_USERNAME}",
+            f"Butuh bantuan?\nTelegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}",
             parse_mode="Markdown"
         )
     except:
@@ -852,7 +852,6 @@ print(f"Proxy       : {FIXIE_URL[:20] + '...' if FIXIE_URL else 'Tidak ada (dire
 print(f"Produk      : {sum(len(v) for v in PRODUCTS['pulsa'].values())} pulsa, {sum(len(v) for v in PRODUCTS['data'].values())} data")
 
 # Notif ke admin saat bot online + kirim IP Railway
-# Notif ke admin saat bot online + kirim IP Railway
 def notif_online():
     try:
         ip = get_ip_railway()
@@ -865,6 +864,36 @@ def notif_online():
     except:
         pass
 
+# Notif maintenance ke semua user saat bot baru online
+def notif_maintenance_selesai():
+    import time
+    time.sleep(3)  # tunggu bot siap dulu
+    users = get_all_users()
+    berhasil = 0
+    for uid in users:
+        if uid == ADMIN_ID:
+            continue
+        try:
+            bot.send_message(
+                uid,
+                "Andika Store\n\n"
+                "Bot kembali online setelah maintenance.\n"
+                "Silakan lanjutkan transaksi kamu. \U0001f44b"
+            )
+            berhasil += 1
+            time.sleep(0.05)  # hindari flood Telegram
+        except:
+            pass
+    # Laporan ke admin
+    try:
+        bot.send_message(
+            ADMIN_ID,
+            "Notif maintenance terkirim ke " + str(berhasil) + " user."
+        )
+    except:
+        pass
+
 threading.Thread(target=notif_online, daemon=True).start()
+threading.Thread(target=notif_maintenance_selesai, daemon=True).start()
 
 bot.infinity_polling()
