@@ -1,4 +1,3 @@
-import threading
 import telebot
 import requests
 import hashlib
@@ -17,6 +16,7 @@ BOT_TOKEN     = os.getenv("BOT_TOKEN")
 ADMIN_ID      = int(os.getenv("ADMIN_ID"))
 ADMIN_USERNAME= os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_WA = "wa.me/6285136080650"
+MAINTENANCE_MODE = False  # Status maintenance
 DIGI_USERNAME = os.getenv("DIGI_USERNAME", "")
 DIGI_API_KEY  = os.getenv("DIGI_API_KEY", "")
 SANDBOX_MODE  = os.getenv("SANDBOX_MODE", "True") == "True"
@@ -182,6 +182,16 @@ def start(message):
     uid = message.from_user.id
     save_user(uid, message.from_user.first_name, message.from_user.username)
     user_sessions[uid] = {}
+    if MAINTENANCE_MODE and uid != ADMIN_ID:
+        bot.send_message(
+            uid,
+            "🔧 *ADK Store Sedang Maintenance*\n\n"
+            "Mohon maaf, layanan kami sedang dalam pemeliharaan\.\n"
+            "Silakan coba beberapa saat lagi 🙏\n\n"
+            f"Info: Telegram @{ADMIN_USERNAME} \| WhatsApp {ADMIN_WA}",
+            parse_mode="MarkdownV2"
+        )
+        return
     mode_text = "🧪 MODE TESTING" if SANDBOX_MODE else "🟢 LIVE"
     teks = (
         f"👋 Halo, *{message.from_user.first_name}*!\n\n"
@@ -198,6 +208,9 @@ def start(message):
 @bot.message_handler(func=lambda m: m.text == "📱 Pulsa")
 def menu_pulsa(message):
     uid = message.from_user.id
+    if MAINTENANCE_MODE and uid != ADMIN_ID:
+        bot.send_message(uid, "🔧 Maaf, ADK Store sedang maintenance. Silakan coba beberapa saat lagi.")
+        return
     user_sessions[uid] = {"tipe": "pulsa"}
     bot.send_message(message.chat.id, "📱 *Pulsa*\nPilih operator:", parse_mode="Markdown", reply_markup=menu_operator_pulsa())
 
