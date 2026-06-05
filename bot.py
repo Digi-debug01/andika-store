@@ -827,15 +827,14 @@ def cek_ip(message):
     if message.from_user.id != ADMIN_ID:
         return
     ip = get_ip_railway()
+    teks = (
+        "\U0001f310 *IP Railway Saat Ini*\n\n"
+        + f"`{ip}`"
+        + "\n\nPastikan IP ini sudah ada di whitelist Digiflazz."
+    )
     bot.send_message(
         message.chat.id,
-        f"🌐 *IP Railway Saat Ini*
-
-"
-        f"`{ip}`
-
-"
-        f"Pastikan IP ini sudah ada di whitelist Digiflazz.",
+        teks,
         parse_mode="Markdown",
         reply_markup=menu_admin()
     )
@@ -852,27 +851,19 @@ print(f"Proxy       : {FIXIE_URL[:20] + '...' if FIXIE_URL else 'Tidak ada (dire
 print(f"Produk      : {sum(len(v) for v in PRODUCTS['pulsa'].values())} pulsa, {sum(len(v) for v in PRODUCTS['data'].values())} data")
 
 # Notif ke admin saat bot online + kirim IP Railway
+# Notif ke admin saat bot online + kirim IP Railway
 def notif_online():
     try:
         ip = get_ip_railway()
-        mode = "SANDBOX 🧪" if SANDBOX_MODE else "PRODUCTION 🟢"
-        bot.send_message(
-            ADMIN_ID,
-            f"🤖 *Bot Andika Store Online!*
-
-"
-            f"🌐 IP Railway : `{ip}`
-"
-            f"⚙️ Mode       : {mode}
-
-"
-            f"Cek whitelist Digiflazz jika IP berubah.",
-            parse_mode="Markdown"
-        )
+        mode = "SANDBOX" if SANDBOX_MODE else "PRODUCTION"
+        teks = "Bot Andika Store Online!\n\n"
+        teks += "IP Railway : " + ip + "\n"
+        teks += "Mode       : " + mode + "\n\n"
+        teks += "Cek whitelist Digiflazz jika IP berubah."
+        bot.send_message(ADMIN_ID, teks)
     except:
         pass
 
-import threading
 threading.Thread(target=notif_online, daemon=True).start()
 
 bot.infinity_polling()
