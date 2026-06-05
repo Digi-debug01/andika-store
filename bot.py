@@ -423,7 +423,8 @@ def info(message):
         f"📶 Paket data\n"
         f"🎮 Top Up Game (segera hadir)\n\n"
         f"Hubungi Admin:\n"
-        f"@{ADMIN_USERNAME}\n\n"
+        f"Telegram : @{ADMIN_USERNAME}\n"
+        f"WhatsApp : {ADMIN_WA}\n\n"
         f"Ref ID transaksi bisa dicek via:\n"
         f"💳 Cek Transaksi"
     )
