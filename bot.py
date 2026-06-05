@@ -1,5 +1,6 @@
 import telebot
 import requests
+import threading
 import hashlib
 import os
 from dotenv import load_dotenv
@@ -185,11 +186,10 @@ def start(message):
     if MAINTENANCE_MODE and uid != ADMIN_ID:
         bot.send_message(
             uid,
-            "🔧 *ADK Store Sedang Maintenance*\n\n"
-            "Mohon maaf, layanan kami sedang dalam pemeliharaan\.\n"
+            "🔧 ADK Store Sedang Maintenance\n\n"
+            "Mohon maaf, layanan kami sedang dalam pemeliharaan.\n"
             "Silakan coba beberapa saat lagi 🙏\n\n"
-            f"Info: Telegram @{ADMIN_USERNAME} \| WhatsApp {ADMIN_WA}",
-            parse_mode="MarkdownV2"
+            f"Info: Telegram @{ADMIN_USERNAME} | WhatsApp {ADMIN_WA}",
         )
         return
     mode_text = "🧪 MODE TESTING" if SANDBOX_MODE else "🟢 LIVE"
