@@ -253,8 +253,13 @@ def pilih_operator_data(message):
 
 @bot.message_handler(func=lambda m: m.text == "🎮 Top Up Game")
 def menu_game(message):
-    bot.send_message(message.chat.id, "🎮 Top Up Game\n\nSegera hadir! Hubungi admin untuk sementara:\n/admin", reply_markup=menu_utama())
-
+uid = message.from_user.id
+    user_sessions[uid] = {"tipe": "game"}
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    for game in PRODUCTS["game"].keys():
+        markup.add(types.KeyboardButton(f"🎮 {game}"))
+    markup.add(types.KeyboardButton("🔙 Kembali"))
+    bot.send_message(message.chat.id, "Pilih game:", reply_markup=markup)
 # ─────────────────────────────────────────────
 # PILIH NOMINAL
 # ─────────────────────────────────────────────
