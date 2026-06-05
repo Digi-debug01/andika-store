@@ -253,7 +253,7 @@ def pilih_operator_data(message):
 
 @bot.message_handler(func=lambda m: m.text == "🎮 Top Up Game")
 def menu_game(message):
-uid = message.from_user.id
+    uid = message.from_user.id
     user_sessions[uid] = {"tipe": "game"}
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     for game in PRODUCTS["game"].keys():
