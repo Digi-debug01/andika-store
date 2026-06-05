@@ -324,6 +324,35 @@ def input_nomor(message):
 # KONFIRMASI ORDER
 # ─────────────────────────────────────────────
 
+@bot.message_handler(func=lambda m: user_sessions.get(m.from_user.id, {}).get("step") == "input_zone")
+def input_zone(message):
+    uid = message.from_user.id
+    if message.text == "🔙 Kembali":
+        user_sessions[uid] = {}
+        bot.send_message(message.chat.id, "Menu utama.", reply_markup=menu_utama())
+        return
+    zone = message.text.strip()
+    if not zone.isdigit():
+        bot.send_message(message.chat.id, "Zone ID tidak valid. Masukkan angka saja. Contoh: 1234")
+        return
+    sesi   = user_sessions.get(uid, {})
+    produk = sesi.get("produk", {})
+    nomor  = sesi.get("nomor")
+    user_sessions[uid]["zone_id"] = zone
+    user_sessions[uid]["step"] = "konfirmasi"
+    teks = (
+        "Konfirmasi Order\n\n"
+        + "Produk  : " + produk["nama"] + "\n"
+        + "User ID : " + nomor + "\n"
+        + "Zone ID : " + zone + "\n"
+        + "Harga   : " + format_rupiah(produk["harga"]) + "\n\n"
+        + "Pastikan User ID dan Zone ID sudah benar!\n"
+        + "Ketik YA untuk lanjut atau BATAL"
+    )
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add(types.KeyboardButton("YA"), types.KeyboardButton("BATAL"))
+    bot.send_message(message.chat.id, teks, reply_markup=markup)
+
 @bot.message_handler(func=lambda m: m.text in ["YA", "BATAL"] and user_sessions.get(m.from_user.id, {}).get("step") == "konfirmasi")
 def konfirmasi_order(message):
     uid  = message.from_user.id
@@ -421,7 +450,7 @@ def info(message):
         f"Tersedia:\n"
         f"📱 Pulsa semua operator\n"
         f"📶 Paket data\n"
-        f"🎮 Top Up Game (segera hadir)\n\n"
+        f"🎮 Top Up Game (Mobile Legends & lainnya)\n\n"
         f"Hubungi Admin:\n"
         f"Telegram : @{ADMIN_USERNAME}\n"
         f"WhatsApp : {ADMIN_WA}\n\n"
