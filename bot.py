@@ -295,6 +295,7 @@ def menu_utama():
         types.KeyboardButton("📱 Pulsa"),
         types.KeyboardButton("📶 Paket Data"),
         types.KeyboardButton("🎮 Top Up Game"),
+        types.KeyboardButton("⚡ Token PLN"),
         types.KeyboardButton("💳 Cek Transaksi"),
         types.KeyboardButton("ℹ️ Info & Bantuan")
     )
@@ -352,7 +353,7 @@ def start(message):
     teks = (
         f"👋 Halo, *{message.from_user.first_name}*!\n\n"
         f"Selamat datang di *Andika Store* {mode_text}\n"
-        f"Pulsa, Paket Data & Top Up Game!\n\n"
+        f"Pulsa, Paket Data, Top Up Game & Token PLN!\n\n"
         f"Silakan pilih menu:"
     )
     bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=menu_utama())
@@ -402,6 +403,25 @@ def pilih_operator_data(message):
     user_sessions[uid]["operator"] = operator
     user_sessions[uid]["step"] = "pilih_nominal"
     bot.send_message(message.chat.id, f"📶 *Paket Data {operator}*\nPilih paket:", parse_mode="Markdown", reply_markup=menu_nominal(operator, "data"))
+
+# ─────────────────────────────────────────────
+# MENU TOKEN PLN
+# ─────────────────────────────────────────────
+
+@bot.message_handler(func=lambda m: m.text == "⚡ Token PLN")
+def menu_pln(message):
+    uid = message.from_user.id
+    if MAINTENANCE_MODE and uid != ADMIN_ID:
+        bot.send_message(uid, "🔧 Maaf, ADK Store sedang maintenance. Silakan coba beberapa saat lagi.")
+        return
+    user_sessions[uid] = {"tipe": "pln", "operator": "Token Listrik"}
+    user_sessions[uid]["step"] = "pilih_nominal"
+    bot.send_message(
+        message.chat.id,
+        "⚡ *Token Listrik PLN*\nPilih nominal token:",
+        parse_mode="Markdown",
+        reply_markup=menu_nominal("Token Listrik", "pln")
+    )
 
 # ─────────────────────────────────────────────
 # MENU GAME
@@ -466,6 +486,8 @@ def pilih_nominal(message):
     tipe = sesi.get("tipe", "pulsa")
     if tipe == "game":
         prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan *User ID* game kamu:"
+    elif tipe == "pln":
+        prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan *ID Pelanggan/No Meter* PLN:\n(contoh: 12345678901)"
     else:
         prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:\n(contoh: 08123456789)"
     bot.send_message(
@@ -497,6 +519,14 @@ def input_nomor(message):
                 "❌ User ID tidak valid!\n\nMasukkan User ID game kamu dengan benar."
             )
             return
+    elif tipe == "pln":
+        nomor = message.text.strip()
+        if not nomor.isdigit() or len(nomor) < 10 or len(nomor) > 12:
+            bot.send_message(
+                message.chat.id,
+                "❌ ID Pelanggan tidak valid!\n\nMasukkan ID Pelanggan/No Meter PLN (10-12 digit angka):\nContoh: 12345678901"
+            )
+            return
     else:
         nomor = validasi_nomor(message.text.strip())
         if not nomor:
@@ -523,7 +553,7 @@ def input_nomor(message):
         return
 
     user_sessions[uid]["step"]  = "konfirmasi"
-    label = "User ID" if tipe == "game" else "Nomor"
+    label = "User ID" if tipe == "game" else "ID Pelanggan" if tipe == "pln" else "Nomor"
     teks = (
         f"📋 *Konfirmasi Order*\n\n"
         f"Produk : {produk['nama']}\n"
@@ -635,6 +665,9 @@ def konfirmasi_order(message):
     elif tipe == "game":
         detail_user  = f"User ID : `{nomor}`"
         detail_notif = f"🎮 User ID: {nomor}"
+    elif tipe == "pln":
+        detail_user  = f"ID Pelanggan : `{nomor}`"
+        detail_notif = f"⚡ ID Pelanggan: {nomor}"
     else:
         detail_user  = f"Nomor   : `{nomor}`"
         detail_notif = f"📞 {nomor}"

@@ -169,6 +169,17 @@ PRODUCTS = {
             {"kode": "PUBG500", "nama": "PUBG 500 UC",           "harga": 124525},
         ],
     },
+    "pln": {
+        "Token Listrik": [
+            {"kode": "PLN5",   "nama": "Token PLN 5.000",     "harga": 7689},
+            {"kode": "PLN10",  "nama": "Token PLN 10.000",    "harga": 12689},
+            {"kode": "PLN15",  "nama": "Token PLN 15.000",    "harga": 17694},
+            {"kode": "PLN20",  "nama": "Token PLN 20.000",    "harga": 22724},
+            {"kode": "PLN50",  "nama": "Token PLN 50.000",    "harga": 52783},
+            {"kode": "PLN100", "nama": "Token PLN 100.000",   "harga": 102795},
+            {"kode": "PLN1K",  "nama": "Token PLN 1.000.000", "harga": 1002787},
+        ],
+    },
 }
 
 # ─────────────────────────────────────────────
