@@ -89,6 +89,116 @@ def cek_transaksi_digi(ref_id):
     except Exception as e:
         return {"data": {"rc": "ERROR", "message": str(e)}}
 
+def auto_cek_status(ref_id, admin_chat_id, percobaan=1, maks=6, interval=10):
+    """
+    Auto cek status transaksi pending ke Digiflazz di background.
+    Dipanggil otomatis setelah /sukses jika RC=03 (pending).
+    Coba maks 6x dengan jeda interval detik (default total ~1 menit).
+    """
+    import time
+    time.sleep(interval)
+
+    order = get_order(ref_id)
+    if not order:
+        return
+    # Jika sudah diupdate manual oleh admin, hentikan polling
+    if order.get("status") == "sukses":
+        return
+
+    hasil = cek_transaksi_digi(ref_id)
+    data  = hasil.get("data", {})
+    rc    = data.get("rc", "")
+    pesan = data.get("message", "")
+    status_digi = data.get("status", "")
+
+    if rc == "00" or status_digi == "Sukses":
+        update_order_status(ref_id, "sukses")
+        try:
+            bot.send_message(
+                order["user_id"],
+                f"✅ *Order Berhasil!*\n\n"
+                f"Ref ID : `{ref_id}`\n"
+                f"Produk : {order['produk']}\n"
+                f"Nomor  : {order['nomor']}\n"
+                f"Status : SUKSES ✅\n\n"
+                f"Terima kasih sudah belanja di Andika Store! 🙏",
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+        try:
+            bot.send_message(
+                admin_chat_id,
+                f"✅ *Auto Cek — SUKSES!*\n\n"
+                f"Ref ID : `{ref_id}`\n"
+                f"Percobaan ke-{percobaan} dari {maks}\n\n"
+                f"Pembeli sudah dinotifikasi otomatis.",
+                parse_mode="Markdown",
+                reply_markup=menu_admin()
+            )
+        except:
+            pass
+
+    elif rc == "03" or status_digi == "Pending":
+        if percobaan < maks:
+            # Masih pending, coba lagi
+            t = threading.Thread(
+                target=auto_cek_status,
+                args=(ref_id, admin_chat_id, percobaan + 1, maks, interval),
+                daemon=True
+            )
+            t.start()
+        else:
+            # Sudah maks percobaan, minta admin cek manual
+            try:
+                bot.send_message(
+                    admin_chat_id,
+                    f"⚠️ *Auto Cek Habis ({maks}x)*\n\n"
+                    f"Ref ID : `{ref_id}`\n"
+                    f"Status masih *PENDING* setelah {maks * interval} detik.\n\n"
+                    f"Silakan cek manual:\n/cekstatus {ref_id}",
+                    parse_mode="Markdown",
+                    reply_markup=menu_admin()
+                )
+            except:
+                pass
+
+    else:
+        # Gagal saat polling
+        update_order_status(ref_id, "gagal")
+        try:
+            bot.send_message(
+                order["user_id"],
+                f"❌ *Order Gagal*\n\n"
+                f"Ref ID : `{ref_id}`\n"
+                f"Produk : {order['produk']}\n"
+                f"Nomor  : {order['nomor']}\n"
+                f"Harga  : {format_rupiah(order['harga'])}\n\n"
+                f"Maaf, transaksi kamu tidak berhasil diproses.\n"
+                f"Dana kamu akan dikembalikan (refund) oleh admin.\n\n"
+                f"Hubungi admin:\nTelegram : @{ADMIN_USERNAME}\nWhatsApp : {ADMIN_WA}",
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+        try:
+            bot.send_message(
+                admin_chat_id,
+                f"❌ *Auto Cek — GAGAL*\n\n"
+                f"Ref ID : `{ref_id}`\n"
+                f"RC: {rc} | Pesan: {pesan}\n\n"
+                f"⚠️ PERLU REFUND:\n"
+                f"Pembeli: {order['nama']}\n"
+                f"Nominal: {format_rupiah(order['harga'])}\n\n"
+                f"Pembeli sudah dinotifikasi untuk menghubungi admin.\n"
+                f"Tandai refund: /refund {ref_id}",
+                parse_mode="Markdown",
+                reply_markup=menu_admin()
+            )
+        except:
+            pass
+
+
 def cek_nickname_ml(user_id, zone_id):
     """
     Cek nickname ML gratis, tanpa beli produk apapun.
@@ -185,6 +295,7 @@ def menu_utama():
         types.KeyboardButton("📱 Pulsa"),
         types.KeyboardButton("📶 Paket Data"),
         types.KeyboardButton("🎮 Top Up Game"),
+        types.KeyboardButton("⚡ Token PLN"),
         types.KeyboardButton("💳 Cek Transaksi"),
         types.KeyboardButton("ℹ️ Info & Bantuan")
     )
@@ -242,7 +353,7 @@ def start(message):
     teks = (
         f"👋 Halo, *{message.from_user.first_name}*!\n\n"
         f"Selamat datang di *Andika Store* {mode_text}\n"
-        f"Pulsa, Paket Data & Top Up Game!\n\n"
+        f"Pulsa, Paket Data, Top Up Game & Token PLN!\n\n"
         f"Silakan pilih menu:"
     )
     bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=menu_utama())
@@ -292,6 +403,25 @@ def pilih_operator_data(message):
     user_sessions[uid]["operator"] = operator
     user_sessions[uid]["step"] = "pilih_nominal"
     bot.send_message(message.chat.id, f"📶 *Paket Data {operator}*\nPilih paket:", parse_mode="Markdown", reply_markup=menu_nominal(operator, "data"))
+
+# ─────────────────────────────────────────────
+# MENU TOKEN PLN
+# ─────────────────────────────────────────────
+
+@bot.message_handler(func=lambda m: m.text == "⚡ Token PLN")
+def menu_pln(message):
+    uid = message.from_user.id
+    if MAINTENANCE_MODE and uid != ADMIN_ID:
+        bot.send_message(uid, "🔧 Maaf, ADK Store sedang maintenance. Silakan coba beberapa saat lagi.")
+        return
+    user_sessions[uid] = {"tipe": "pln", "operator": "Token Listrik"}
+    user_sessions[uid]["step"] = "pilih_nominal"
+    bot.send_message(
+        message.chat.id,
+        "⚡ *Token Listrik PLN*\nPilih nominal token:",
+        parse_mode="Markdown",
+        reply_markup=menu_nominal("Token Listrik", "pln")
+    )
 
 # ─────────────────────────────────────────────
 # MENU GAME
@@ -356,6 +486,8 @@ def pilih_nominal(message):
     tipe = sesi.get("tipe", "pulsa")
     if tipe == "game":
         prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan *User ID* game kamu:"
+    elif tipe == "pln":
+        prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan *ID Pelanggan/No Meter* PLN:\n(contoh: 12345678901)"
     else:
         prompt = f"*{produk['nama']}*\nHarga: *{format_rupiah(produk['harga'])}*\n\nMasukkan nomor HP tujuan:\n(contoh: 08123456789)"
     bot.send_message(
@@ -387,6 +519,14 @@ def input_nomor(message):
                 "❌ User ID tidak valid!\n\nMasukkan User ID game kamu dengan benar."
             )
             return
+    elif tipe == "pln":
+        nomor = message.text.strip()
+        if not nomor.isdigit() or len(nomor) < 10 or len(nomor) > 12:
+            bot.send_message(
+                message.chat.id,
+                "❌ ID Pelanggan tidak valid!\n\nMasukkan ID Pelanggan/No Meter PLN (10-12 digit angka):\nContoh: 12345678901"
+            )
+            return
     else:
         nomor = validasi_nomor(message.text.strip())
         if not nomor:
@@ -413,7 +553,7 @@ def input_nomor(message):
         return
 
     user_sessions[uid]["step"]  = "konfirmasi"
-    label = "User ID" if tipe == "game" else "Nomor"
+    label = "User ID" if tipe == "game" else "ID Pelanggan" if tipe == "pln" else "Nomor"
     teks = (
         f"📋 *Konfirmasi Order*\n\n"
         f"Produk : {produk['nama']}\n"
@@ -525,6 +665,9 @@ def konfirmasi_order(message):
     elif tipe == "game":
         detail_user  = f"User ID : `{nomor}`"
         detail_notif = f"🎮 User ID: {nomor}"
+    elif tipe == "pln":
+        detail_user  = f"ID Pelanggan : `{nomor}`"
+        detail_notif = f"⚡ ID Pelanggan: {nomor}"
     else:
         detail_user  = f"Nomor   : `{nomor}`"
         detail_notif = f"📞 {nomor}"
@@ -812,9 +955,15 @@ def order_sukses(message):
             f"⏳ Transaksi pending di Digiflazz!\n"
             f"Ref ID: {ref_id}\n\n"
             f"Pembeli sudah dinotifikasi.\n"
-            f"Cek status dengan: /cekstatus {ref_id}",
+            f"🔄 Auto cek status dimulai (setiap 10 detik, maks 6x)...",
             reply_markup=menu_admin()
         )
+        # Mulai auto polling di background
+        threading.Thread(
+            target=auto_cek_status,
+            args=(ref_id, message.chat.id),
+            daemon=True
+        ).start()
 
     else:
         update_order_status(ref_id, "gagal")

@@ -54,87 +54,74 @@ PRODUCTS = {
         ],
     },
 
-    # ─────────────────────────────────────────────
-    # PAKET DATA
-    # ─────────────────────────────────────────────
     "data": {
         "Telkomsel": [
-            # Umum
-            {"kode": "DTSL1G3H",       "nama": "Telkomsel 1GB 3 Hari",       "harga": 9555},
-            {"kode": "DTSL2G3H",       "nama": "Telkomsel 2GB 3 Hari",       "harga": 11855},
-            {"kode": "DTSL1G7H",       "nama": "Telkomsel 1GB 7 Hari",       "harga": 10655},
-            {"kode": "DTSL1G15H",      "nama": "Telkomsel 1GB 15 Hari",      "harga": 11755},
-            # Flash
-            {"kode": "DTSLF1G30H",     "nama": "Telkomsel Flash 1GB 30 Hari",  "harga": 12385},
-            {"kode": "DTSLF2G30H",     "nama": "Telkomsel Flash 2GB 30 Hari",  "harga": 24025},
-            {"kode": "DTSLF3G30H",     "nama": "Telkomsel Flash 3GB 30 Hari",  "harga": 35190},
-            # Combo Sakti
-            {"kode": "DTSLCS1.5G30H",  "nama": "Telkomsel Combo Sakti 1.5GB 30 Hari", "harga": 22510},
-            {"kode": "DTSLCS2.5G30H",  "nama": "Telkomsel Combo Sakti 2.5GB 30 Hari", "harga": 22775},
-            {"kode": "DTSLCS3G30H",    "nama": "Telkomsel Combo Sakti 3GB 30 Hari",   "harga": 24525},
-            {"kode": "DTSLCS4G30H",    "nama": "Telkomsel Combo Sakti 4GB 30 Hari",   "harga": 36125},
+            {"kode": "DTSL1G3H",      "nama": "Telkomsel 1GB 3 Hari",               "harga": 9555},
+            {"kode": "DTSL2G3H",      "nama": "Telkomsel 2GB 3 Hari",               "harga": 11855},
+            {"kode": "DTSL1G7H",      "nama": "Telkomsel 1GB 7 Hari",               "harga": 10655},
+            {"kode": "DTSL1G15H",     "nama": "Telkomsel 1GB 15 Hari",              "harga": 11755},
+            {"kode": "DTSLF1G30H",    "nama": "Telkomsel Flash 1GB 30 Hari",        "harga": 12385},
+            {"kode": "DTSLF2G30H",    "nama": "Telkomsel Flash 2GB 30 Hari",        "harga": 24025},
+            {"kode": "DTSLF3G30H",    "nama": "Telkomsel Flash 3GB 30 Hari",        "harga": 35190},
+            {"kode": "DTSLCS1.5G30H", "nama": "Telkomsel Combo Sakti 1.5GB 30 Hari","harga": 22510},
+            {"kode": "DTSLCS2.5G30H", "nama": "Telkomsel Combo Sakti 2.5GB 30 Hari","harga": 22775},
+            {"kode": "DTSLCS3G30H",   "nama": "Telkomsel Combo Sakti 3GB 30 Hari",  "harga": 24525},
+            {"kode": "DTSLCS4G30H",   "nama": "Telkomsel Combo Sakti 4GB 30 Hari",  "harga": 36125},
         ],
         "Indosat": [
-            # Umum
-            {"kode": "DISAT1G7H",      "nama": "Indosat 1GB 7 Hari",        "harga": 6700},
-            {"kode": "DISAT1G3H",      "nama": "Indosat 1GB 3 Hari",        "harga": 6695},
-            {"kode": "DISAT1G14H",     "nama": "Indosat 1GB 14 Hari",       "harga": 6805},
-            # Yellow
-            {"kode": "DISATY1G1H",     "nama": "Indosat Yellow 1GB 1 Hari", "harga": 6855},
-            {"kode": "DISATY1G2H",     "nama": "Indosat Yellow 1GB 2 Hari", "harga": 6915},
-            {"kode": "DISATY1G3H",     "nama": "Indosat Yellow 1GB 3 Hari", "harga": 7005},
-            # Freedom Internet
-            {"kode": "DISATF1.5G1H",   "nama": "Indosat Freedom 1.5GB 1 Hari",   "harga": 7865},
-            {"kode": "DISATF5G1H",     "nama": "Indosat Freedom 5GB 1 Hari",     "harga": 7755},
-            {"kode": "DISATF1G2H",     "nama": "Indosat Freedom 1GB 2 Hari",     "harga": 9910},
-            {"kode": "DISATF1.5G3H",   "nama": "Indosat Freedom 1.5GB 3 Hari",   "harga": 12770},
-            {"kode": "DISATF2.5G3H",   "nama": "Indosat Freedom 2.5GB 3 Hari",   "harga": 8000},
-            {"kode": "DISATF3G3H",     "nama": "Indosat Freedom 3GB 3 Hari",     "harga": 12705},
-            {"kode": "DISATF1.5G5H",   "nama": "Indosat Freedom 1.5GB 5 Hari",   "harga": 9945},
-            {"kode": "DISATF2G5H",     "nama": "Indosat Freedom 2GB 5 Hari",     "harga": 13932},
-            {"kode": "DISATF2.5G5H",   "nama": "Indosat Freedom 2.5GB 5 Hari",   "harga": 13920},
-            {"kode": "DISATF10G5H",    "nama": "Indosat Freedom 10GB 5 Hari",    "harga": 13740},
-            {"kode": "DISATF1.5G28H",  "nama": "Indosat Freedom 1.5GB 28 Hari",  "harga": 11030},
-            {"kode": "DISATF2G15H",    "nama": "Indosat Freedom 2GB 15 Hari",    "harga": 12430},
-            {"kode": "DISATF7G7H",     "nama": "Indosat Freedom 7GB 7 Hari",     "harga": 23435},
-            {"kode": "DISATF3G28H",    "nama": "Indosat Freedom 3GB 28 Hari",    "harga": 26510},
-            {"kode": "DISATF5.5G28H",  "nama": "Indosat Freedom 5.5GB 28 Hari",  "harga": 35545},
+            {"kode": "DISAT1G7H",     "nama": "Indosat 1GB 7 Hari",                "harga": 6700},
+            {"kode": "DISAT1G3H",     "nama": "Indosat 1GB 3 Hari",                "harga": 6695},
+            {"kode": "DISAT1G14H",    "nama": "Indosat 1GB 14 Hari",               "harga": 6805},
+            {"kode": "DISATY1G1H",    "nama": "Indosat Yellow 1GB 1 Hari",         "harga": 6855},
+            {"kode": "DISATY1G2H",    "nama": "Indosat Yellow 1GB 2 Hari",         "harga": 6915},
+            {"kode": "DISATY1G3H",    "nama": "Indosat Yellow 1GB 3 Hari",         "harga": 7005},
+            {"kode": "DISATF1.5G1H",  "nama": "Indosat Freedom 1.5GB 1 Hari",     "harga": 7865},
+            {"kode": "DISATF5G1H",    "nama": "Indosat Freedom 5GB 1 Hari",        "harga": 7755},
+            {"kode": "DISATF1G2H",    "nama": "Indosat Freedom 1GB 2 Hari",        "harga": 9910},
+            {"kode": "DISATF1.5G3H",  "nama": "Indosat Freedom 1.5GB 3 Hari",     "harga": 12770},
+            {"kode": "DISATF2.5G3H",  "nama": "Indosat Freedom 2.5GB 3 Hari",     "harga": 8000},
+            {"kode": "DISATF3G3H",    "nama": "Indosat Freedom 3GB 3 Hari",        "harga": 12705},
+            {"kode": "DISATF1.5G5H",  "nama": "Indosat Freedom 1.5GB 5 Hari",     "harga": 9945},
+            {"kode": "DISATF2G5H",    "nama": "Indosat Freedom 2GB 5 Hari",        "harga": 13932},
+            {"kode": "DISATF2.5G5H",  "nama": "Indosat Freedom 2.5GB 5 Hari",     "harga": 13920},
+            {"kode": "DISATF10G5H",   "nama": "Indosat Freedom 10GB 5 Hari",       "harga": 13740},
+            {"kode": "DISATF1.5G28H", "nama": "Indosat Freedom 1.5GB 28 Hari",    "harga": 11030},
+            {"kode": "DISATF2G15H",   "nama": "Indosat Freedom 2GB 15 Hari",       "harga": 12430},
+            {"kode": "DISATF7G7H",    "nama": "Indosat Freedom 7GB 7 Hari",        "harga": 23435},
+            {"kode": "DISATF3G28H",   "nama": "Indosat Freedom 3GB 28 Hari",       "harga": 26510},
+            {"kode": "DISATF5.5G28H", "nama": "Indosat Freedom 5.5GB 28 Hari",    "harga": 35545},
         ],
         "Axis": [
-            # Aigo
-            {"kode": "DAXSA1.5G3H",   "nama": "Axis Aigo 1.5GB 3 Hari",  "harga": 11803},
-            {"kode": "DAXSA2.5G2H",   "nama": "Axis Aigo 2.5GB 2 Hari",  "harga": 11020},
-            {"kode": "DAXSA2G3H",     "nama": "Axis Aigo 2GB 3 Hari",    "harga": 10630},
-            {"kode": "DAXSA4G3H",     "nama": "Axis Aigo 4GB 3 Hari",    "harga": 13151},
-            {"kode": "DAXSA2G5H",     "nama": "Axis Aigo 2GB 5 Hari",    "harga": 13780},
+            {"kode": "DAXSA1.5G3H",  "nama": "Axis Aigo 1.5GB 3 Hari",  "harga": 11803},
+            {"kode": "DAXSA2.5G2H",  "nama": "Axis Aigo 2.5GB 2 Hari",  "harga": 11020},
+            {"kode": "DAXSA2G3H",    "nama": "Axis Aigo 2GB 3 Hari",    "harga": 10630},
+            {"kode": "DAXSA4G3H",    "nama": "Axis Aigo 4GB 3 Hari",    "harga": 13151},
+            {"kode": "DAXSA2G5H",    "nama": "Axis Aigo 2GB 5 Hari",    "harga": 13780},
         ],
         "Smartfren": [
-            # Unlimited
-            {"kode": "DSMTU1G1H",     "nama": "Smartfren Unlimited 1GB 1 Hari",  "harga": 9969},
-            {"kode": "DSMTU3G3H",     "nama": "Smartfren Unlimited 3GB 3 Hari",  "harga": 15400},
-            {"kode": "DSMTU1G3H",     "nama": "Smartfren Unlimited 1GB 3 Hari",  "harga": 15695},
-            {"kode": "DSMTU5G3H",     "nama": "Smartfren Unlimited 5GB 3 Hari",  "harga": 20160},
-            {"kode": "DSMTU1G7H",     "nama": "Smartfren Unlimited 1GB 7 Hari",  "harga": 23210},
-            {"kode": "DSMTU2G7H",     "nama": "Smartfren Unlimited 2GB 7 Hari",  "harga": 24400},
+            {"kode": "DSMTU1G1H",  "nama": "Smartfren Unlimited 1GB 1 Hari", "harga": 9969},
+            {"kode": "DSMTU3G3H",  "nama": "Smartfren Unlimited 3GB 3 Hari", "harga": 15400},
+            {"kode": "DSMTU1G3H",  "nama": "Smartfren Unlimited 1GB 3 Hari", "harga": 15695},
+            {"kode": "DSMTU5G3H",  "nama": "Smartfren Unlimited 5GB 3 Hari", "harga": 20160},
+            {"kode": "DSMTU1G7H",  "nama": "Smartfren Unlimited 1GB 7 Hari", "harga": 23210},
+            {"kode": "DSMTU2G7H",  "nama": "Smartfren Unlimited 2GB 7 Hari", "harga": 24400},
         ],
         "Tri": [
-            # Happy
-            {"kode": "DTRIH1.5G1H",   "nama": "Tri Happy 1.5GB 1 Hari",  "harga": 6195},
-            {"kode": "DTRIH3G3H",     "nama": "Tri Happy 3GB 3 Hari",    "harga": 12662},
+            {"kode": "DTRIH1.5G1H", "nama": "Tri Happy 1.5GB 1 Hari", "harga": 6195},
+            {"kode": "DTRIH3G3H",   "nama": "Tri Happy 3GB 3 Hari",   "harga": 12662},
         ],
         "XL": [
-            # Mini
-            {"kode": "DXLM1G7H",      "nama": "XL Mini 1GB 7 Hari",    "harga": 10360},
-            {"kode": "DXLM1.5G7H",    "nama": "XL Mini 1.5GB 7 Hari",  "harga": 11210},
-            {"kode": "DXLM2.5G7H",    "nama": "XL Mini 2.5GB 7 Hari",  "harga": 16010},
-            {"kode": "DXLM4G7H",      "nama": "XL Mini 4GB 7 Hari",    "harga": 19910},
-            {"kode": "DXLM6G7H",      "nama": "XL Mini 6GB 7 Hari",    "harga": 25775},
+            {"kode": "DXLM1G7H",   "nama": "XL Mini 1GB 7 Hari",   "harga": 10360},
+            {"kode": "DXLM1.5G7H", "nama": "XL Mini 1.5GB 7 Hari", "harga": 11210},
+            {"kode": "DXLM2.5G7H", "nama": "XL Mini 2.5GB 7 Hari", "harga": 16010},
+            {"kode": "DXLM4G7H",   "nama": "XL Mini 4GB 7 Hari",   "harga": 19910},
+            {"kode": "DXLM6G7H",   "nama": "XL Mini 6GB 7 Hari",   "harga": 25775},
         ],
     },
 
     "game": {
         "Mobile Legends": [
-            # Diamond Umum
+            {"kode": "MLCEK",  "nama": "ML Cek Username",          "harga": 100},
             {"kode": "ML5",    "nama": "ML 5 Diamond",             "harga": 2000},
             {"kode": "ML10",   "nama": "ML 10 Diamond",            "harga": 3500},
             {"kode": "ML12",   "nama": "ML 12 Diamond",            "harga": 4000},
@@ -149,7 +136,6 @@ PRODUCTS = {
             {"kode": "ML1000", "nama": "ML 1000 Diamond",          "harga": 247000},
             {"kode": "ML1500", "nama": "ML 1500 Diamond",          "harga": 374000},
             {"kode": "ML2010", "nama": "ML 2010 Diamond",          "harga": 471000},
-            # Membership
             {"kode": "WDP1",   "nama": "ML Weekly Diamond Pass",   "harga": 29500},
             {"kode": "WDP2",   "nama": "ML Weekly Diamond Pass 2x","harga": 57000},
             {"kode": "WDP3",   "nama": "ML Weekly Diamond Pass 3x","harga": 84500},
@@ -157,7 +143,43 @@ PRODUCTS = {
             {"kode": "MLTP",   "nama": "ML Twilight Pass",         "harga": 147000},
             {"kode": "STARP",  "nama": "ML Starlight Member Plus", "harga": 306000},
         ],
-    }
+        "Free Fire": [
+            {"kode": "FF12",   "nama": "FF 12 Diamond",   "harga": 2765},
+            {"kode": "FF15",   "nama": "FF 15 Diamond",   "harga": 3419},
+            {"kode": "FF50",   "nama": "FF 50 Diamond",   "harga": 7299},
+            {"kode": "FF70",   "nama": "FF 70 Diamond",   "harga": 9800},
+            {"kode": "FF105",  "nama": "FF 105 Diamond",  "harga": 14500},
+            {"kode": "FF140",  "nama": "FF 140 Diamond",  "harga": 18600},
+            {"kode": "FF200",  "nama": "FF 200 Diamond",  "harga": 26536},
+            {"kode": "FF260",  "nama": "FF 260 Diamond",  "harga": 33727},
+            {"kode": "FF355",  "nama": "FF 355 Diamond",  "harga": 44875},
+            {"kode": "FF500",  "nama": "FF 500 Diamond",  "harga": 63405},
+            {"kode": "FF790",  "nama": "FF 790 Diamond",  "harga": 97800},
+            {"kode": "FF1000", "nama": "FF 1000 Diamond", "harga": 124200},
+            {"kode": "FF1510", "nama": "FF 1510 Diamond", "harga": 184936},
+            {"kode": "FF2000", "nama": "FF 2000 Diamond", "harga": 245841},
+        ],
+        "PUBG Mobile": [
+            {"kode": "PUBGP",   "nama": "PUBG Royale Pass",      "harga": 185629},
+            {"kode": "PUBGPP",  "nama": "PUBG Elite Pass Plus",  "harga": 357070},
+            {"kode": "PUBG15",  "nama": "PUBG 15 UC",            "harga": 3715},
+            {"kode": "PUBG16",  "nama": "PUBG 16 UC",            "harga": 3640},
+            {"kode": "PUBG50",  "nama": "PUBG 50 UC",            "harga": 10050},
+            {"kode": "PUBG100", "nama": "PUBG 100 UC",           "harga": 31930},
+            {"kode": "PUBG500", "nama": "PUBG 500 UC",           "harga": 124525},
+        ],
+    },
+    "pln": {
+        "Token Listrik": [
+            {"kode": "PLN5",   "nama": "Token PLN 5.000",     "harga": 7689},
+            {"kode": "PLN10",  "nama": "Token PLN 10.000",    "harga": 12689},
+            {"kode": "PLN15",  "nama": "Token PLN 15.000",    "harga": 17694},
+            {"kode": "PLN20",  "nama": "Token PLN 20.000",    "harga": 22724},
+            {"kode": "PLN50",  "nama": "Token PLN 50.000",    "harga": 52783},
+            {"kode": "PLN100", "nama": "Token PLN 100.000",   "harga": 102795},
+            {"kode": "PLN1K",  "nama": "Token PLN 1.000.000", "harga": 1002787},
+        ],
+    },
 }
 
 # ─────────────────────────────────────────────
@@ -168,62 +190,3 @@ for _kategori, _operators in PRODUCTS.items():
     for _operator, _items in _operators.items():
         for _item in _items:
             SKU_MAP[_item["kode"]] = {**_item, "operator": _operator, "kategori": _kategori}
-
-# ─────────────────────────────────────────────
-# DAFTAR HARGA OFFLINE (Modal + Rp2.000)
-# ─────────────────────────────────────────────
-HARGA_OFFLINE = {
-    # Pulsa Telkomsel
-    "TSL5": 7200, "TSL10": 12135, "TSL15": 16900,
-    "TSL20": 21960, "TSL25": 26685, "TSL50": 52025, "TSL100": 99020,
-    # Pulsa Indosat
-    "ISAT5": 8359, "ISAT10": 13570, "ISAT20": 22510,
-    "ISAT50": 51818, "ISAT100": 101030,
-    # Pulsa XL
-    "XL5": 7933, "XL10": 12855, "XL15": 16994,
-    "XL25": 26975, "XL50": 51935, "XL100": 101820,
-    # Pulsa Tri
-    "TRI5": 7110, "TRI10": 13655, "TRI20": 21620, "TRI50": 51020,
-    # Pulsa Axis
-    "AXS5": 7848, "AXS10": 12895, "AXS15": 16994,
-    "AXS50": 51935, "AXS100": 101820,
-    # Pulsa Smartfren
-    "SMT2": 4009, "SMT3": 5006, "SMT4": 6003,
-    "SMT5": 7205, "SMT10": 12040, "SMT15": 16980, "SMT100": 51855,
-    # Data Telkomsel Umum
-    "DTSL1G3H": 10555, "DTSL2G3H": 12855, "DTSL1G7H": 11655, "DTSL1G15H": 12755,
-    # Data Telkomsel Flash
-    "DTSLF1G30H": 13385, "DTSLF2G30H": 25025, "DTSLF3G30H": 36190,
-    # Data Telkomsel Combo Sakti
-    "DTSLCS1.5G30H": 23510, "DTSLCS2.5G30H": 23775,
-    "DTSLCS3G30H": 25525, "DTSLCS4G30H": 37125,
-    # Data Indosat Umum
-    "DISAT1G7H": 7700, "DISAT1G3H": 7695, "DISAT1G14H": 7805,
-    # Data Indosat Yellow
-    "DISATY1G1H": 7855, "DISATY1G2H": 7915, "DISATY1G3H": 8005,
-    # Data Indosat Freedom
-    "DISATF1.5G1H": 8865, "DISATF5G1H": 8755, "DISATF1G2H": 10910,
-    "DISATF1.5G3H": 13770, "DISATF2.5G3H": 9000, "DISATF3G3H": 13705,
-    "DISATF1.5G5H": 10945, "DISATF2G5H": 14932, "DISATF2.5G5H": 14920,
-    "DISATF10G5H": 14740, "DISATF1.5G28H": 12030, "DISATF2G15H": 13430,
-    "DISATF7G7H": 24435, "DISATF3G28H": 27510, "DISATF5.5G28H": 36545,
-    # Data Axis Aigo
-    "DAXSA1.5G3H": 12803, "DAXSA2.5G2H": 12020, "DAXSA2G3H": 11630,
-    "DAXSA4G3H": 14151, "DAXSA2G5H": 14780,
-    # Data Smartfren Unlimited
-    "DSMTU1G1H": 10969, "DSMTU3G3H": 16400, "DSMTU1G3H": 16695,
-    "DSMTU5G3H": 21160, "DSMTU1G7H": 24210, "DSMTU2G7H": 25400,
-    # Data Tri Happy
-    "DTRIH1.5G1H": 7195, "DTRIH3G3H": 13662,
-    # Data XL Mini
-    "DXLM1G7H": 11360, "DXLM1.5G7H": 12210, "DXLM2.5G7H": 17010,
-    "DXLM4G7H": 20910, "DXLM6G7H": 26775,
-    # Mobile Legends Diamond
-    "ML5": 2500, "ML10": 4000, "ML12": 4500, "ML15": 5500,
-    "ML20": 7000, "ML50": 15500, "ML100": 29000, "ML200": 55000,
-    "ML250": 68000, "ML500": 131000, "ML750": 192000, "ML1000": 249000,
-    "ML1500": 376000, "ML2010": 473000,
-    # ML Membership
-    "WDP1": 31500, "WDP2": 59000, "WDP3": 86500,
-    "STAR": 81000, "MLTP": 149000, "STARP": 308000,
-}
