@@ -245,6 +245,31 @@ def cek_nickname_ml(user_id, zone_id):
 
     return None
 
+def cek_id_pln(customer_no):
+    """
+    Cek ID Pelanggan PLN via Digiflazz inquiry-pln.
+    Return dict {nama, daya, ...} jika valid, None jika gagal/tidak ditemukan.
+    """
+    sign = digi_sign(DIGI_USERNAME, DIGI_API_KEY, customer_no)
+    payload = {
+        "commands":    "pln-subscribe",
+        "username":    DIGI_USERNAME,
+        "customer_no": customer_no,
+        "sign":        sign
+    }
+    try:
+        r = requests.post(f"{DIGI_URL}/transaction", json=payload, timeout=15, proxies=get_proxies())
+        data = r.json().get("data", {})
+        if data.get("status") == "Sukses" or data.get("rc") == "00":
+            return {
+                "nama": data.get("customer_name", ""),
+                "meter": data.get("meter_no", ""),
+                "daya": data.get("segment_power", "")
+            }
+        return None
+    except Exception:
+        return None
+
 def buat_ref_id(user_id):
     return f"AS{user_id}{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
@@ -554,6 +579,44 @@ def input_nomor(message):
 
     user_sessions[uid]["step"]  = "konfirmasi"
     label = "User ID" if tipe == "game" else "ID Pelanggan" if tipe == "pln" else "Nomor"
+
+    # Khusus PLN — cek nama pelanggan dulu via Digiflazz
+    if tipe == "pln":
+        loading_msg = bot.send_message(message.chat.id, "🔍 Memverifikasi ID Pelanggan, mohon tunggu...")
+        info_pln = cek_id_pln(nomor)
+        try:
+            bot.delete_message(message.chat.id, loading_msg.message_id)
+        except:
+            pass
+
+        if not info_pln:
+            user_sessions[uid] = {}
+            bot.send_message(
+                message.chat.id,
+                "❌ ID Pelanggan tidak ditemukan!\n\n"
+                "Pastikan ID Pelanggan/No Meter PLN yang kamu masukkan benar.\n"
+                "Silakan ulangi dari menu Token PLN.",
+                reply_markup=menu_utama()
+            )
+            return
+
+        user_sessions[uid]["nama_pelanggan"] = info_pln["nama"]
+        teks = (
+            f"✅ *ID Pelanggan Ditemukan!*\n\n"
+            f"📋 *Konfirmasi Order*\n\n"
+            f"Produk        : {produk['nama']}\n"
+            f"ID Pelanggan  : `{nomor}`\n"
+            f"Nama          : *{info_pln['nama']}*\n"
+            f"Daya          : {info_pln['daya']}\n"
+            f"Harga         : *{format_rupiah(produk['harga'])}*\n\n"
+            f"Pastikan nama di atas sesuai!\n"
+            f"Ketik *YA* untuk lanjut atau *BATAL*"
+        )
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+        markup.add(types.KeyboardButton("YA"), types.KeyboardButton("BATAL"))
+        bot.send_message(message.chat.id, teks, parse_mode="Markdown", reply_markup=markup)
+        return
+
     teks = (
         f"📋 *Konfirmasi Order*\n\n"
         f"Produk : {produk['nama']}\n"
@@ -666,8 +729,9 @@ def konfirmasi_order(message):
         detail_user  = f"User ID : `{nomor}`"
         detail_notif = f"🎮 User ID: {nomor}"
     elif tipe == "pln":
-        detail_user  = f"ID Pelanggan : `{nomor}`"
-        detail_notif = f"⚡ ID Pelanggan: {nomor}"
+        nama_plg = sesi.get("nama_pelanggan", "")
+        detail_user  = f"ID Pelanggan : `{nomor}`\nNama         : {nama_plg}"
+        detail_notif = f"⚡ ID Pelanggan: {nomor} ({nama_plg})"
     else:
         detail_user  = f"Nomor   : `{nomor}`"
         detail_notif = f"📞 {nomor}"
@@ -917,6 +981,17 @@ def order_sukses(message):
 
     if rc == "00":
         update_order_status(ref_id, "sukses")
+        sn = data.get("sn", "")
+        tipe = order.get("tipe", "")
+
+        # Khusus PLN — tampilkan token
+        if tipe == "pln" and sn:
+            token_info = f"\n\n🔑 *Token PLN:*\n`{sn}`\n\nSegera masukkan token ke meteran listrik."
+        elif sn:
+            token_info = f"\n\nSN: `{sn}`"
+        else:
+            token_info = ""
+
         # Notif ke pembeli
         try:
             bot.send_message(
@@ -925,13 +1000,14 @@ def order_sukses(message):
                 f"Ref ID : `{ref_id}`\n"
                 f"Produk : {order['produk']}\n"
                 f"Nomor  : {order['nomor']}\n"
-                f"Status : SUKSES ✅\n\n"
+                f"Status : SUKSES ✅"
+                f"{token_info}\n\n"
                 f"Terima kasih sudah belanja di Andika Store! 🙏",
                 parse_mode="Markdown"
             )
         except:
             pass
-        bot.send_message(message.chat.id, f"✅ Order {ref_id} berhasil diproses!", reply_markup=menu_admin())
+        bot.send_message(message.chat.id, f"✅ Order {ref_id} berhasil diproses!" + (f"\nToken: {sn}" if sn else ""), reply_markup=menu_admin())
 
     elif rc == "03":
         update_order_status(ref_id, "diproses")
@@ -1017,6 +1093,16 @@ def cek_status_digi(message):
 
     if rc == "00" or status_digi == "Sukses":
         update_order_status(ref_id, "sukses")
+        sn = data.get("sn", "")
+        tipe = order.get("tipe", "")
+
+        if tipe == "pln" and sn:
+            token_info = f"\n\n🔑 *Token PLN:*\n`{sn}`\n\nSegera masukkan token ke meteran listrik."
+        elif sn:
+            token_info = f"\n\nSN: `{sn}`"
+        else:
+            token_info = ""
+
         try:
             bot.send_message(
                 order["user_id"],
@@ -1024,13 +1110,14 @@ def cek_status_digi(message):
                 f"Ref ID : `{ref_id}`\n"
                 f"Produk : {order['produk']}\n"
                 f"Nomor  : {order['nomor']}\n"
-                f"Status : SUKSES ✅\n\n"
+                f"Status : SUKSES ✅"
+                f"{token_info}\n\n"
                 f"Terima kasih sudah belanja di Andika Store! 🙏",
                 parse_mode="Markdown"
             )
         except:
             pass
-        bot.send_message(message.chat.id, f"✅ Status diupdate: SUKSES\nPembeli sudah dinotifikasi!", reply_markup=menu_admin())
+        bot.send_message(message.chat.id, f"✅ Status diupdate: SUKSES" + (f"\nToken: {sn}" if sn else "") + "\nPembeli sudah dinotifikasi!", reply_markup=menu_admin())
 
     elif rc == "03" or status_digi == "Pending":
         # Pembeli diinfokan masih pending
