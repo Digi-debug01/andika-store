@@ -252,17 +252,16 @@ def cek_id_pln(customer_no):
     """
     sign = digi_sign(DIGI_USERNAME, DIGI_API_KEY, customer_no)
     payload = {
-        "commands":    "pln-subscribe",
         "username":    DIGI_USERNAME,
         "customer_no": customer_no,
         "sign":        sign
     }
     try:
-        r = requests.post(f"{DIGI_URL}/transaction", json=payload, timeout=15, proxies=get_proxies())
+        r = requests.post(f"{DIGI_URL}/inquiry-pln", json=payload, timeout=15, proxies=get_proxies())
         data = r.json().get("data", {})
         if data.get("status") == "Sukses" or data.get("rc") == "00":
             return {
-                "nama": data.get("customer_name", ""),
+                "nama": data.get("name", ""),
                 "meter": data.get("meter_no", ""),
                 "daya": data.get("segment_power", "")
             }
