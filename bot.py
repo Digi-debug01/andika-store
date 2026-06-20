@@ -113,6 +113,16 @@ def auto_cek_status(ref_id, admin_chat_id, percobaan=1, maks=6, interval=10):
 
     if rc == "00" or status_digi == "Sukses":
         update_order_status(ref_id, "sukses")
+
+        sn   = data.get("sn", "")
+        tipe = order.get("tipe", "")
+        if tipe == "pln" and sn:
+            token_info = f"\n\n🔑 *Token PLN:*\n`{sn}`\n\nSegera masukkan token ke meteran listrik."
+        elif sn:
+            token_info = f"\n\nSN: `{sn}`"
+        else:
+            token_info = ""
+
         try:
             bot.send_message(
                 order["user_id"],
@@ -120,7 +130,8 @@ def auto_cek_status(ref_id, admin_chat_id, percobaan=1, maks=6, interval=10):
                 f"Ref ID : `{ref_id}`\n"
                 f"Produk : {order['produk']}\n"
                 f"Nomor  : {order['nomor']}\n"
-                f"Status : SUKSES ✅\n\n"
+                f"Status : SUKSES ✅"
+                f"{token_info}\n\n"
                 f"Terima kasih sudah belanja di Andika Store! 🙏",
                 parse_mode="Markdown"
             )
